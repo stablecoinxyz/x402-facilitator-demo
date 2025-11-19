@@ -1,0 +1,22 @@
+{
+  "name": "x402-poc",
+  "version": "1.0.0",
+  "description": "SBC x402 Facilitator POC on Radius Testnet",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "install-all": "npm install && npm run install:facilitator && npm run install:api && npm run install:agent",
+    "install:facilitator": "cd packages/facilitator && npm install",
+    "install:api": "cd packages/premium-api && npm install",
+    "install:agent": "cd packages/ai-agent && npm install",
+    "dev:facilitator": "cd packages/facilitator && npm run dev",
+    "dev:api": "cd packages/premium-api && npm run dev",
+    "run:agent": "cd packages/ai-agent && npm run start",
+    "demo": "./demo.sh"
+  },
+  "keywords": ["x402", "facilitator", "radius", "payments", "ai-agents"],
+  "author": "SBC",
+  "license": "MIT"
+}
