@@ -95,7 +95,7 @@ export const radiusTestnet = {
   blockExplorers: {
     default: {
       name: 'Radius Explorer',
-      url: 'https://testnet.radius.xyz',
+      url: 'https://testnet.radiustech.xyz/testnet/explorer',
     },
   },
   testnet: true,

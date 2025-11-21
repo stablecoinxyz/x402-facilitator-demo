@@ -1,5 +1,6 @@
 import { config } from './config';
 import { createPaymentAuthorization } from './x402-client';
+import { createSolanaPaymentAuthorization } from './solana-client';
 
 // Type definitions
 interface PaymentRequirement {
@@ -54,7 +55,36 @@ async function main() {
     // Step 3: Create payment authorization
     console.log('✍️  Step 3: Creating payment authorization...');
 
-    const xPaymentHeader = await createPaymentAuthorization(paymentReq);
+    // Determine which payment method to use
+    const availableSchemes = paymentReq.accepts.map((req: PaymentRequirement) => req.scheme);
+    console.log('   Available payment schemes:', availableSchemes.join(', '));
+
+    let xPaymentHeader: string;
+    let usedScheme: string;
+
+    // Check for Solana option first (if preferred)
+    const hasSolana = availableSchemes.includes('scheme_exact_solana');
+    const hasEVM = availableSchemes.includes('scheme_exact_evm');
+
+    if (config.preferredScheme === 'solana' && hasSolana) {
+      console.log('   Using Solana payment (preferred) 🟣');
+      xPaymentHeader = await createSolanaPaymentAuthorization(paymentReq);
+      usedScheme = 'solana';
+    } else if (config.preferredScheme === 'evm' && hasEVM) {
+      console.log('   Using EVM payment (preferred) 🔵');
+      xPaymentHeader = await createPaymentAuthorization(paymentReq);
+      usedScheme = 'evm';
+    } else if (hasSolana && config.agentSolanaPrivateKey) {
+      console.log('   Using Solana payment (available) 🟣');
+      xPaymentHeader = await createSolanaPaymentAuthorization(paymentReq);
+      usedScheme = 'solana';
+    } else if (hasEVM && config.agentPrivateKey) {
+      console.log('   Using EVM payment (available) 🔵');
+      xPaymentHeader = await createPaymentAuthorization(paymentReq);
+      usedScheme = 'evm';
+    } else {
+      throw new Error('No compatible payment method available or configured');
+    }
 
     console.log('   ✅ Payment authorization created!\n');
 
@@ -85,8 +115,13 @@ async function main() {
       console.log('   │ └─ Message:', data.message);
       console.log('   └─────────────────────────────────────\n');
 
+      // Display correct explorer URL based on network
       console.log('🔗 View transaction:');
-      console.log(`   https://testnet.radiustech.xyz/testnet/explorer?view=tx-details&hash=${data.paymentTxHash}\n`);
+      if (data.networkId === 'solana-mainnet-beta') {
+        console.log(`   https://orb.helius.dev/tx/${data.paymentTxHash}?cluster=mainnet-beta&tab=summary\n`);
+      } else {
+        console.log(`   https://testnet.radiustech.xyz/testnet/explorer?view=tx-details&hash=${data.paymentTxHash}\n`);
+      }
 
       console.log('✅ AI Agent completed successfully!\n');
     } else {

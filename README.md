@@ -1,41 +1,52 @@
 # x402 Facilitator POC
 
-**SBC's x402 Payment Facilitator on Radius Testnet**
+**SBC's Multi-Chain x402 Payment Facilitator**
 
-This is a proof-of-concept implementation demonstrating:
+Production-ready x402 facilitator supporting both EVM and Solana:
 
 - ✅ Full x402 protocol flow (HTTP 402 Payment Required)
+- ✅ **Multi-chain support:** EVM (Radius) + Solana (Mainnet)
 - ✅ Custom facilitator infrastructure (not using Coinbase CDP)
-- ✅ Radius testnet settlement (2.5M+ TPS capability)
+- ✅ **Real mainnet payments:** SBC token on Solana
 - ✅ AI agent making autonomous payments
 - ✅ Sub-2-second payment settlement
 
 ## Architecture
 
 ```
-AI Agent → Premium API (402) → Facilitator (/verify + /settle) → Radius Testnet
+AI Agent (Multi-Chain) → Premium API (offers both EVM & Solana)
+                              ↓
+                    Facilitator (/verify + /settle)
+                              ↓
+              ┌───────────────┴────────────────┐
+              ↓                                ↓
+    Radius Testnet (EVM)          Solana Mainnet (SBC Token)
 ```
 
 ### Components
 
 1. **Premium API** (`packages/premium-api`) - Express server on port 3000
 
-   - Returns 402 Payment Required for `/premium-data` endpoint
+   - Returns 402 Payment Required with **both** EVM and Solana payment options
    - Verifies and settles payments via facilitator
    - Returns premium content after successful payment
 
 2. **Facilitator** (`packages/facilitator`) - Express server on port 3001
 
-   - `/verify` - Validates EIP-712 payment signatures
-   - `/settle` - Executes on-chain transfers on Radius testnet
-   - Implements x402 facilitator protocol
+   - `/verify` - Validates payment signatures (EIP-712 for EVM, Ed25519 for Solana)
+   - `/settle` - Executes on-chain transfers on both chains
+   - Routes by payment scheme (`scheme_exact_evm` or `scheme_exact_solana`)
 
 3. **AI Agent** (`packages/ai-agent`) - TypeScript CLI
-   - Requests premium API access
-   - Creates EIP-712 signed payment authorization
+   - Intelligently chooses payment method (prefers Solana by default)
+   - Creates signed payment authorizations for either chain
    - Completes payment and receives premium data
 
 ## Quick Start
+
+Choose your payment chain:
+- **EVM (Radius Testnet)** - Test with native USD tokens
+- **Solana (Mainnet)** - Production-ready with real SBC tokens
 
 ### 1. Install Dependencies
 
@@ -53,14 +64,23 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
-Required environment variables:
+**For EVM (Radius Testnet):**
+- `RADIUS_TESTNET_RPC_URL` - Get API key from <https://radiustech.xyz>
+- `FACILITATOR_WALLET_PRIVATE_KEY` - Facilitator's EVM private key
+- `RECIPIENT_ADDRESS` - Facilitator's EVM address
+- `AI_AGENT_PRIVATE_KEY` - AI agent's EVM private key
+- Get testnet USD: https://testnet.radiustech.xyz/testnet/faucet
 
-- `RADIUS_TESTNET_RPC_URL` - Get API key from <https://radius.xyz>
-- `FACILITATOR_WALLET_PRIVATE_KEY` - Facilitator's private key (needs testnet USD)
-- `RECIPIENT_ADDRESS` - Facilitator's wallet address (receives payments)
-- `AI_AGENT_PRIVATE_KEY` - AI agent's private key (needs testnet USD for payments)
+**For Solana (Mainnet):**
+- `SOLANA_RPC_URL` - Solana RPC endpoint (e.g., Helius)
+- `FACILITATOR_SOLANA_PRIVATE_KEY` - Facilitator's Solana private key (Base58)
+- `FACILITATOR_SOLANA_ADDRESS` - Facilitator's Solana address
+- `AI_AGENT_SOLANA_PRIVATE_KEY` - AI agent's Solana private key (Base58)
+- `AI_AGENT_SOLANA_ADDRESS` - AI agent's Solana address
+- `SBC_TOKEN_ADDRESS` - SBC token mint (default: `DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA`)
+- `PREFERRED_PAYMENT_SCHEME` - `'solana'` or `'evm'`
 
-**Get testnet USD:** <https://faucet.radius.xyz>
+**💡 See [SOLANA_TEST_GUIDE.md](./SOLANA_TEST_GUIDE.md) for detailed Solana setup instructions.**
 
 ### 3. Start Services
 
@@ -89,21 +109,34 @@ npm run start
 
 ```
 🤖 AI Agent starting...
+✅ AI Agent configuration loaded
+   Preferred Scheme: solana
+   Solana Agent Address: <YOUR_ADDRESS>
 
 📡 Requesting premium data...
 💰 Payment required!
 
 Payment requirements: {
   "x402Version": 1,
-  "accepts": [{
-    "scheme": "scheme_exact_evm",
-    "network": "1223953",
-    "maxAmount": "10000000000000000",
-    "recipientAddress": "0x..."
-  }]
+  "accepts": [
+    {
+      "scheme": "scheme_exact_evm",
+      "network": "1223953",
+      "maxAmount": "10000000000000000",
+      "recipientAddress": "0x..."
+    },
+    {
+      "scheme": "scheme_exact_solana",
+      "network": "solana-mainnet-beta",
+      "maxAmount": "50000000",
+      "recipientAddress": "<SOLANA_ADDRESS>"
+    }
+  ]
 }
 
 ✍️  Creating payment authorization...
+   Available payment schemes: scheme_exact_evm, scheme_exact_solana
+   Using Solana payment (preferred) 🟣
 ✅ Payment authorized!
 
 📡 Retrying request with payment...
@@ -111,11 +144,12 @@ Payment requirements: {
 🎉 Success! Received premium data:
 {
   "data": "This is premium data from the API!",
-  "paymentTxHash": "0x...",
+  "paymentTxHash": "<TX_SIGNATURE>",
+  "networkId": "solana-mainnet-beta",
   "message": "Payment successful"
 }
 
-🔗 Transaction: https://testnet.radius.xyz/tx/0x...
+🔗 Transaction: https://orb.helius.dev/tx/<TX_SIGNATURE>?cluster=mainnet-beta&tab=summary
 ```
 
 ## Payment Flow
@@ -129,6 +163,7 @@ GET /premium-data
 
 ### Step 2: Agent Creates Payment Authorization
 
+**For EVM (Radius):**
 ```typescript
 // EIP-712 signature
 const signature = await wallet.signTypedData({
@@ -136,6 +171,13 @@ const signature = await wallet.signTypedData({
   types: { Payment: [...] },
   message: { from, to, amount, nonce, deadline }
 });
+```
+
+**For Solana:**
+```typescript
+// Ed25519 signature
+const message = `from:${from}|to:${to}|amount:${amount}|nonce:${nonce}|deadline:${deadline}`;
+const signature = nacl.sign.detached(Buffer.from(message), keypair.secretKey);
 ```
 
 ### Step 3: Agent Retries with X-PAYMENT Header
@@ -171,20 +213,37 @@ POST http://localhost:3001/settle
 
 ## Network Configuration
 
-**Radius Testnet:**
+### Radius Testnet (EVM)
 
 - Chain ID: `1223953`
 - RPC: `https://rpc.testnet.radiustech.xyz/<api-key>`
-- Explorer: `https://testnet.radius.xyz`
+- Explorer: `https://testnet.radiustech.xyz/testnet/explorer`
 - Native Currency: USD (18 decimals)
-- Faucet: `https://faucet.radius.xyz`
+- Faucet: `https://testnet.radiustech.xyz/testnet/faucet`
+
+### Solana Mainnet
+
+- Network: `mainnet-beta`
+- RPC: `https://api.mainnet-beta.solana.com` (or use Helius, QuickNode, etc.)
+- Explorer: `https://orb.helius.dev`
+- Token: SBC (`DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA`)
+- Decimals: 9
 
 ## Payment Details
 
-- **Amount:** 0.01 USD (10000000000000000 wei)
+### EVM (Radius Testnet)
+- **Scheme:** `scheme_exact_evm`
+- **Amount:** 0.01 USD (10000000000000000 wei, 18 decimals)
 - **Token:** Native USD on Radius testnet
+- **Settlement:** Simulated (testnet)
 - **Settlement Time:** <2 seconds
-- **Protocol:** x402 v1 with `scheme_exact_evm`
+
+### Solana (Mainnet)
+- **Scheme:** `scheme_exact_solana`
+- **Amount:** 0.05 SBC (50000000, 9 decimals)
+- **Token:** SBC SPL token
+- **Settlement:** Real on-chain transfers 💰
+- **Settlement Time:** <2 seconds
 
 ## Project Structure
 
@@ -201,20 +260,42 @@ x402-poc/
 └── README.md
 ```
 
-## Next Steps (Production)
+## Features & Roadmap
 
-1. **Deploy SBC Token to Radius** - Use SBC instead of native USD
-2. **Add Base Sepolia Settlement** - Cross-chain routing
-3. **Implement Account Abstraction** - Gasless payments for users
-4. **Add Multi-Chain Support** - Solana, Polygon, etc.
-5. **Build Monitoring Dashboard** - Analytics, SLA tracking
-6. **Enterprise Features** - Rate limiting, fraud detection, compliance
+### ✅ Production-Ready
+- Multi-chain support (EVM + Solana)
+- Real mainnet payments (SBC on Solana)
+- Intelligent payment routing
+- Facilitator-sponsored settlements
+- Ed25519 + EIP-712 signature verification
+
+### 🚧 Future Enhancements
+1. **More Chains** - Base, Polygon, Arbitrum
+2. **More Tokens** - USDC, USDT support
+3. **Account Abstraction** - Gasless payments for users
+4. **Monitoring Dashboard** - Analytics, SLA tracking
+5. **Enterprise Features** - Rate limiting, fraud detection, compliance
+6. **Batch Payments** - Multiple payments in one transaction
+
+## Documentation
+
+- **[SOLANA_TEST_GUIDE.md](./SOLANA_TEST_GUIDE.md)** - Complete Solana testing guide
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Detailed architecture documentation
+- **[QUICKSTART.md](./QUICKSTART.md)** - Quick start guide
+- **[TESTING.md](./TESTING.md)** - Testing documentation
+
+## Helper Scripts
+
+- `generate-solana-keypair.js` - Generate Solana wallets
+- `check-solana-wallet.js` - Check SOL and SBC balances
+- `test-solana-payment.js` - Standalone Solana payment test
 
 ## References
 
 - [x402 Protocol Spec](https://github.com/coinbase/x402)
 - [Coinbase CDP x402 Docs](https://docs.cdp.coinbase.com/x402/welcome)
 - [Radius Network Docs](https://docs.radiustech.xyz)
+- [Solana Docs](https://docs.solana.com)
 
 ## License
 

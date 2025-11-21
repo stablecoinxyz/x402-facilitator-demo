@@ -246,7 +246,7 @@
 **Configuration:**
 - Chain ID: `1223953`
 - RPC URL: `https://rpc.testnet.radiustech.xyz/<api-key>`
-- Explorer: `https://testnet.radius.xyz`
+- Explorer: `https://testnet.radiustech.xyz/testnet/explorer`
 - Native Currency: USD (18 decimals)
 
 **Capabilities:**

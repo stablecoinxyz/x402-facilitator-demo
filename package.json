@@ -16,7 +16,14 @@
     "run:agent": "cd packages/ai-agent && npm run start",
     "demo": "./demo.sh"
   },
-  "keywords": ["x402", "facilitator", "radius", "payments", "ai-agents"],
+  "keywords": [
+    "x402",
+    "facilitator",
+    "radius",
+    "solana",
+    "payments",
+    "ai-agents"
+  ],
   "author": "SBC",
   "license": "MIT"
 }

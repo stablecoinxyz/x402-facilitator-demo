@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { createWalletClient, createPublicClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { config } from '../config';
+import { settleSolanaPaymentSponsored } from '../solana/settle';
 
 // Radius Testnet Chain Config
 const radiusTestnet = {
@@ -31,6 +32,19 @@ export async function settlePayment(req: Request, res: Response) {
     const paymentData = JSON.parse(
       Buffer.from(paymentHeader, 'base64').toString()
     );
+
+    console.log('   Scheme:', paymentData.scheme);
+
+    // Route by scheme
+    if (paymentData.scheme === 'scheme_exact_solana') {
+      console.log('   🟣 Solana settlement');
+      const result = await settleSolanaPaymentSponsored(paymentData.payload);
+      console.log(result.success ? '✅ Settlement complete!\n' : '❌ Settlement failed!\n');
+      return res.json(result);
+    }
+
+    // Otherwise, handle EVM payment (existing logic)
+    console.log('   🔵 EVM settlement');
 
     const { from, to, amount } = paymentData.payload;
 

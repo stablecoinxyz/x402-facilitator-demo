@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { createPublicClient, http, verifyTypedData } from 'viem';
 import { config } from '../config';
+import { verifySolanaPayment } from '../solana/verify';
 
 // Radius Testnet Chain Config
 const radiusTestnet = {
@@ -52,6 +53,17 @@ export async function verifyPayment(req: Request, res: Response) {
 
     console.log('   Scheme:', paymentData.scheme);
     console.log('   Network:', paymentData.network);
+
+    // Route by scheme
+    if (paymentData.scheme === 'scheme_exact_solana') {
+      console.log('   🟣 Solana payment detected');
+      const result = await verifySolanaPayment(paymentData.payload, paymentRequirements);
+      console.log(result.isValid ? '✅ Payment verification successful!\n' : '❌ Payment verification failed!\n');
+      return res.json(result);
+    }
+
+    // Otherwise, handle EVM payment (existing logic)
+    console.log('   🔵 EVM payment detected');
 
     const { from, to, amount, nonce, deadline, signature } = paymentData.payload;
 
