@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { createWalletClient, createPublicClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { config } from '../config';
-import { settleSolanaPaymentSponsored } from '../solana/settle';
+import { settleSolanaPayment } from '../solana/settle';
 
 // Radius Testnet Chain Config
 const radiusTestnet = {
@@ -22,6 +22,24 @@ const radiusTestnet = {
   testnet: true,
 };
 
+// Base Mainnet Chain Config
+const baseMainnet = {
+  id: 8453,
+  name: 'Base',
+  network: 'base',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: {
+      http: [config.baseRpcUrl],
+    },
+  },
+  testnet: false,
+};
+
 export async function settlePayment(req: Request, res: Response) {
   try {
     const { paymentHeader, paymentRequirements } = req.body;
@@ -34,17 +52,44 @@ export async function settlePayment(req: Request, res: Response) {
     );
 
     console.log('   Scheme:', paymentData.scheme);
+    console.log('   Network:', paymentData.network);
 
-    // Route by scheme
-    if (paymentData.scheme === 'scheme_exact_solana') {
-      console.log('   🟣 Solana settlement');
-      const result = await settleSolanaPaymentSponsored(paymentData.payload);
+    // Verify scheme is "exact"
+    if (paymentData.scheme !== 'exact') {
+      console.log('   ❌ Unsupported payment scheme');
+      return res.json({
+        success: false,
+        payer: paymentData.payload?.from || 'unknown',
+        transaction: '',
+        network: paymentData.network || 'unknown',
+        errorReason: `Unsupported scheme: ${paymentData.scheme}`
+      });
+    }
+
+    // Route by network
+    if (paymentData.network === 'solana-mainnet-beta') {
+      console.log('   🟣 Solana settlement (delegated transfer)');
+      const result = await settleSolanaPayment(paymentData.payload);
       console.log(result.success ? '✅ Settlement complete!\n' : '❌ Settlement failed!\n');
       return res.json(result);
     }
 
-    // Otherwise, handle EVM payment (existing logic)
-    console.log('   🔵 EVM settlement');
+    // Handle EVM-based payments (Radius or Base)
+    const isBase = paymentData.network === 'base' || paymentData.network === 'base-sepolia' || paymentData.network === '8453' || paymentData.network === '84532';
+    const isRadius = paymentData.network === 'radius-testnet' || paymentData.network === '1223953';
+
+    if (!isBase && !isRadius) {
+      console.log('   ❌ Unknown payment network');
+      return res.json({
+        success: false,
+        payer: paymentData.payload?.from || 'unknown',
+        transaction: '',
+        network: paymentData.network || 'unknown',
+        errorReason: `Unknown network: ${paymentData.network}`
+      });
+    }
+
+    console.log(isBase ? '   🔵 Base settlement' : '   🔵 Radius settlement');
 
     const { from, to, amount } = paymentData.payload;
 
@@ -52,29 +97,30 @@ export async function settlePayment(req: Request, res: Response) {
     console.log('   To:', to);
     console.log('   Amount:', amount);
 
+    // Select chain config and credentials based on scheme
+    const chain = isBase ? baseMainnet : radiusTestnet;
+    const privateKey = isBase ? config.baseFacilitatorPrivateKey : config.radiusFacilitatorPrivateKey;
+    const rpcUrl = isBase ? config.baseRpcUrl : config.radiusRpcUrl;
+    const chainId = isBase ? config.baseChainId : config.radiusChainId;
+    const chainName = isBase ? 'Base' : 'Radius testnet';
+
     // Create facilitator account
-    const account = privateKeyToAccount(config.facilitatorPrivateKey as `0x${string}`);
+    const account = privateKeyToAccount(privateKey as `0x${string}`);
 
     // Create wallet client
     const walletClient = createWalletClient({
       account,
-      chain: radiusTestnet,
-      transport: http(config.radiusRpcUrl),
+      chain,
+      transport: http(rpcUrl),
     });
 
     // Create public client
     const publicClient = createPublicClient({
-      chain: radiusTestnet,
-      transport: http(config.radiusRpcUrl),
+      chain,
+      transport: http(rpcUrl),
     });
 
-    console.log('   Executing transfer on Radius testnet...');
-
-    // NOTE: For native tokens (USD on Radius), the facilitator acts as a paymaster
-    // In production with ERC-20 tokens, you would use:
-    // - EIP-2612 (permit) + transferFrom (SBC has this!)
-    // - EIP-3009 (transferWithAuthorization)
-    // - Account Abstraction (ERC-4337) with paymasters
+    console.log(`   Executing transfer on ${chainName}...`);
 
     // Check if we should use real or simulated settlement
     const useRealSettlement = process.env.ENABLE_REAL_SETTLEMENT === 'true';
@@ -84,27 +130,81 @@ export async function settlePayment(req: Request, res: Response) {
     if (useRealSettlement) {
       console.log('   🔥 REAL SETTLEMENT MODE - Executing on-chain transfer');
 
-      // Execute real on-chain transfer
-      // Facilitator acts as paymaster, sending the amount to recipient
-      const hash = await walletClient.sendTransaction({
-        to: to as `0x${string}`,
-        value: BigInt(amount),
-      });
+      if (isBase) {
+        // Base: ERC-20 token transferFrom
+        // Facilitator executes: Agent → Merchant (facilitator never holds funds)
+        console.log('   📝 ERC-20 TransferFrom (Agent → Merchant)');
+        console.log('   From (Agent):', from);
+        console.log('   To (Merchant):', to);
 
-      txHash = hash;
+        const ERC20_ABI = [
+          {
+            inputs: [
+              { name: 'from', type: 'address' },
+              { name: 'to', type: 'address' },
+              { name: 'amount', type: 'uint256' }
+            ],
+            name: 'transferFrom',
+            outputs: [{ name: '', type: 'bool' }],
+            stateMutability: 'nonpayable',
+            type: 'function'
+          }
+        ] as const;
 
-      console.log('   ⏳ Waiting for confirmation...');
+        const hash = await walletClient.writeContract({
+          address: config.baseSbcTokenAddress as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: 'transferFrom',
+          args: [
+            from as `0x${string}`,  // Agent (payer)
+            to as `0x${string}`,    // Merchant (receiver)
+            BigInt(amount)
+          ]
+        });
 
-      // Wait for transaction confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1
-      });
+        txHash = hash;
 
-      console.log('   ✅ Real tx hash:', txHash);
-      console.log('   ✅ Block number:', receipt.blockNumber);
-      console.log('   ✅ Gas used:', receipt.gasUsed);
-      console.log('✅ Settlement complete on Radius testnet!\n');
+        console.log('   ⏳ Waiting for confirmation...');
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash,
+          confirmations: 1
+        });
+
+        console.log('   ✅ Real tx hash:', txHash);
+        console.log('   ✅ Block number:', receipt.blockNumber);
+        console.log('   ✅ Gas used:', receipt.gasUsed);
+        console.log(`✅ Settlement complete on ${chainName}!\n`);
+      } else {
+        // EVM (Radius): Native token transfer
+        // Note: For native tokens, we can't use transferFrom (no ERC-20)
+        // Agent must send transaction directly, or use account abstraction
+        console.log('   💵 Native token transfer (USD)');
+        console.log('   ⚠️  Native tokens require agent to send tx directly');
+        console.log('   From (Agent):', from);
+        console.log('   To (Merchant):', to);
+
+        // For now, facilitator sends from its own balance (sponsored)
+        // TODO: Implement account abstraction or require agent to send tx
+        const hash = await walletClient.sendTransaction({
+          to: to as `0x${string}`,
+          value: BigInt(amount),
+        });
+
+        txHash = hash;
+
+        console.log('   ⏳ Waiting for confirmation...');
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash,
+          confirmations: 1
+        });
+
+        console.log('   ✅ Real tx hash:', txHash);
+        console.log('   ✅ Block number:', receipt.blockNumber);
+        console.log('   ✅ Gas used:', receipt.gasUsed);
+        console.log(`✅ Settlement complete on ${chainName}!\n`);
+      }
     } else {
       console.log('   ⚠️  SIMULATED MODE - Set ENABLE_REAL_SETTLEMENT=true for real transactions');
 
@@ -117,18 +217,29 @@ export async function settlePayment(req: Request, res: Response) {
 
     res.json({
       success: true,
-      error: null,
-      txHash,
-      networkId: config.chainId.toString(),
+      payer: from,
+      transaction: txHash,
+      network: paymentData.network,
     });
 
   } catch (error: any) {
     console.error('❌ Settlement error:', error);
+
+    // Try to extract payer and network from request if possible
+    let payer = 'unknown';
+    let network = 'unknown';
+    try {
+      const paymentData = JSON.parse(Buffer.from(req.body.paymentHeader, 'base64').toString());
+      payer = paymentData.payload?.from || 'unknown';
+      network = paymentData.network || 'unknown';
+    } catch {}
+
     res.status(500).json({
       success: false,
-      error: error.message,
-      txHash: null,
-      networkId: null,
+      payer,
+      transaction: '',
+      network,
+      errorReason: error.message,
     });
   }
 }

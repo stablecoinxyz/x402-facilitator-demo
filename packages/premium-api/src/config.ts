@@ -6,30 +6,44 @@ export const config = {
   port: parseInt(process.env.PREMIUM_API_PORT || '3000'),
   facilitatorUrl: 'http://localhost:3001',
 
-  // EVM Configuration
-  recipientAddress: process.env.RECIPIENT_ADDRESS || '',
-  paymentAmount: process.env.PAYMENT_AMOUNT || '10000000000000000', // 0.01 USD (18 decimals)
+  // Radius Configuration (Radius Testnet)
+  radiusMerchantAddress: process.env.RADIUS_MERCHANT_ADDRESS || '', // Merchant receives payment
+  radiusFacilitatorAddress: process.env.RADIUS_FACILITATOR_ADDRESS || '', // Facilitator executes tx
+  radiusPaymentAmount: process.env.RADIUS_PAYMENT_AMOUNT || process.env.PAYMENT_AMOUNT || '10000000000000000', // 0.01 USD (18 decimals)
   paymentTimeout: parseInt(process.env.PAYMENT_TIMEOUT || '60'),
-  chainId: 1223953, // Radius testnet
+  radiusChainId: 1223953, // Radius testnet
+
+  // Base Configuration
+  baseMerchantAddress: process.env.BASE_MERCHANT_ADDRESS || '', // Merchant receives payment
+  baseFacilitatorAddress: process.env.BASE_FACILITATOR_ADDRESS || '', // Facilitator executes tx
+  basePaymentAmount: process.env.BASE_PAYMENT_AMOUNT || '10000000000000000', // 0.01 SBC (18 decimals for mainnet)
+  baseChainId: parseInt(process.env.BASE_CHAIN_ID || '8453'), // 8453 = mainnet, 84532 = sepolia
+  baseSbcTokenAddress: process.env.BASE_SBC_TOKEN_ADDRESS || '0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798', // mainnet
 
   // Solana Configuration
-  solanaRecipientAddress: process.env.FACILITATOR_SOLANA_ADDRESS || '',
+  solanaMerchantAddress: process.env.SOLANA_MERCHANT_ADDRESS || '', // Merchant receives payment
+  solanaFacilitatorAddress: process.env.SOLANA_FACILITATOR_ADDRESS || process.env.FACILITATOR_SOLANA_ADDRESS || '', // Facilitator executes/sponsors
   solanaPaymentAmount: process.env.SOLANA_PAYMENT_AMOUNT || '50000000', // 0.05 SBC (9 decimals)
   sbcTokenAddress: process.env.SBC_TOKEN_ADDRESS || 'DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA',
 };
 
 // Validate at least one payment method is configured
-const hasEVM = config.recipientAddress;
-const hasSolana = config.solanaRecipientAddress;
+const hasRadius = config.radiusMerchantAddress;
+const hasBase = config.baseMerchantAddress;
+const hasSolana = config.solanaMerchantAddress;
 
-if (!hasEVM && !hasSolana) {
-  throw new Error('At least one recipient address must be configured');
+if (!hasRadius && !hasBase && !hasSolana) {
+  throw new Error('At least one merchant address must be configured');
 }
 
 console.log('✅ Premium API configuration loaded');
-if (hasEVM) {
-  console.log(`   EVM Chain ID: ${config.chainId}`);
-  console.log(`   EVM Payment Amount: ${config.paymentAmount} (0.01 USD)`);
+if (hasRadius) {
+  console.log(`   Radius Chain ID: ${config.radiusChainId}`);
+  console.log(`   Radius Payment Amount: ${config.radiusPaymentAmount} (0.01 USD)`);
+}
+if (hasBase) {
+  console.log(`   Base Chain ID: ${config.baseChainId}`);
+  console.log(`   Base Payment Amount: ${config.basePaymentAmount} (0.01 SBC)`);
 }
 if (hasSolana) {
   console.log(`   Solana Payment Amount: ${config.solanaPaymentAmount} (0.05 SBC)`);

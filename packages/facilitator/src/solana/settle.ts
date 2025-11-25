@@ -28,16 +28,23 @@ interface SolanaPaymentPayload {
 }
 
 /**
- * Settle a Solana payment by transferring SPL tokens
+ * Settle a Solana payment using delegated SPL token transfer
+ *
+ * Architecture: Agent → Merchant (facilitator executes via delegation)
+ * - Agent has pre-approved facilitator as delegate (one-time setup)
+ * - Facilitator executes transfer FROM agent TO merchant
+ * - Facilitator NEVER holds customer funds
+ * - Same pattern as Base/Radius ERC-20 transferFrom()
  */
 export async function settleSolanaPayment(
   paymentPayload: SolanaPaymentPayload
-): Promise<{ success: boolean; error: string | null; txHash: string | null; networkId: string | null }> {
+): Promise<{ success: boolean; payer: string; transaction: string; network: string; errorReason?: string }> {
   try {
     const { from, to, amount } = paymentPayload;
 
-    console.log('   From:', from);
-    console.log('   To:', to);
+    console.log('   💳 DELEGATED TRANSFER (Non-Custodial)');
+    console.log('   From (Agent):', from);
+    console.log('   To (Merchant):', to);
     console.log('   Amount:', amount, `(${Number(amount) / 1e9} SBC)`);
 
     // Create connection
@@ -45,13 +52,13 @@ export async function settleSolanaPayment(
 
     // Load facilitator keypair from private key (Base58)
     if (!config.solanaFacilitatorPrivateKey) {
-      throw new Error('FACILITATOR_SOLANA_PRIVATE_KEY not configured');
+      throw new Error('SOLANA_FACILITATOR_PRIVATE_KEY not configured');
     }
 
     const secretKey = bs58.decode(config.solanaFacilitatorPrivateKey);
     const facilitatorKeypair = Keypair.fromSecretKey(secretKey);
 
-    console.log('   Facilitator:', facilitatorKeypair.publicKey.toBase58());
+    console.log('   Facilitator (Delegate):', facilitatorKeypair.publicKey.toBase58());
 
     // Parse addresses
     const fromPublicKey = new PublicKey(from);
@@ -78,47 +85,32 @@ export async function settleSolanaPayment(
     let txHash: string;
 
     if (useRealSettlement) {
-      console.log('   🔥 REAL SETTLEMENT MODE - Executing SPL token transfer');
+      console.log('   🔥 REAL SETTLEMENT MODE - Executing delegated SPL token transfer');
 
-      // NOTE: This requires the payer to have approved a token delegation
-      // In production, you would use:
-      // - Token-2022 Transfer Hook with delegate
-      // - Or pre-approved delegation amount
-      // - Or Account Abstraction with session keys
-
-      // For now, we'll have the facilitator act as proxy
-      // In a real implementation, the client would delegate authority to the facilitator
-
-      // Create transfer instruction
+      // Create transfer instruction using FACILITATOR as authority (delegate)
+      // This works because agent has pre-approved facilitator as delegate
       const transferInstruction = createTransferInstruction(
-        fromTokenAccount,           // Source token account
-        toTokenAccount,              // Destination token account
-        fromPublicKey,               // Owner of source account (this is the issue - needs delegation!)
-        BigInt(amount)               // Amount
+        fromTokenAccount,                 // Source (agent's token account)
+        toTokenAccount,                   // Destination (merchant's token account)
+        facilitatorKeypair.publicKey,     // Authority (facilitator as delegate)
+        BigInt(amount)                    // Amount
       );
 
       // Create transaction
       const transaction = new Transaction().add(transferInstruction);
 
       // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      const { blockhash } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = facilitatorKeypair.publicKey;
 
-      console.log('   ⏳ Sending transaction...');
+      console.log('   ⏳ Sending delegated transfer transaction...');
 
-      // NOTE: This will fail because facilitator can't sign for the payer's tokens!
-      // In production, use one of these approaches:
-      // 1. Client pre-approves delegation to facilitator
-      // 2. Use Token-2022 with transfer hooks
-      // 3. Account Abstraction (session keys)
-      // 4. Facilitator acts as paymaster, reimburses later
-
-      // Sign and send transaction
+      // Sign and send transaction (facilitator signs as delegate)
       const signature = await sendAndConfirmTransaction(
         connection,
         transaction,
-        [facilitatorKeypair], // Only facilitator signs (this won't work for token transfer!)
+        [facilitatorKeypair],
         {
           commitment: 'confirmed',
         }
@@ -126,12 +118,14 @@ export async function settleSolanaPayment(
 
       txHash = signature;
 
-      console.log('   ✅ Real tx signature:', txHash);
+      console.log('   ✅ Transaction confirmed:', txHash);
       console.log('   🔗 Explorer:', `https://orb.helius.dev/tx/${txHash}?cluster=mainnet-beta&tab=summary`);
-      console.log('✅ Settlement complete on Solana mainnet!\n');
+      console.log('   💡 Tokens flowed: Agent → Merchant (facilitator never held funds)');
+      console.log('✅ Delegated settlement complete!\n');
     } else {
       console.log('   ⚠️  SIMULATED MODE - Set ENABLE_REAL_SETTLEMENT=true for real transactions');
-      console.log('   ⚠️  NOTE: Real settlement requires token delegation or Account Abstraction');
+      console.log('   ⚠️  NOTE: Real settlement requires agent to approve facilitator as delegate');
+      console.log('   ⚠️  Run: cd packages/ai-agent && npm run approve-solana-facilitator');
 
       // Simulate a transaction signature
       txHash = bs58.encode(Buffer.from(Array(64).fill(0).map(() => Math.floor(Math.random() * 256))));
@@ -142,17 +136,21 @@ export async function settleSolanaPayment(
 
     return {
       success: true,
-      error: null,
-      txHash,
-      networkId: 'solana-mainnet-beta',
+      payer: from,
+      transaction: txHash,
+      network: 'solana-mainnet-beta',
     };
   } catch (error: any) {
     console.error('❌ Solana settlement error:', error);
+    console.error('   💡 If error mentions "insufficient funds" or "owner mismatch", the agent needs to:');
+    console.error('   1. Approve facilitator as delegate: npm run approve-solana-facilitator');
+    console.error('   2. Ensure agent has sufficient SBC token balance');
     return {
       success: false,
-      error: error.message,
-      txHash: null,
-      networkId: null,
+      payer: paymentPayload.from || 'unknown',
+      transaction: '',
+      network: 'solana-mainnet-beta',
+      errorReason: error.message,
     };
   }
 }
@@ -167,9 +165,9 @@ export async function settleSolanaPayment(
  */
 export async function settleSolanaPaymentSponsored(
   paymentPayload: SolanaPaymentPayload
-): Promise<{ success: boolean; error: string | null; txHash: string | null; networkId: string | null }> {
+): Promise<{ success: boolean; payer: string; transaction: string; network: string; errorReason?: string }> {
   try {
-    const { to, amount } = paymentPayload;
+    const { from, to, amount } = paymentPayload;
 
     console.log('   💰 FACILITATOR-SPONSORED SETTLEMENT');
     console.log('   Facilitator will pay recipient directly');
@@ -181,7 +179,7 @@ export async function settleSolanaPaymentSponsored(
 
     // Load facilitator keypair
     if (!config.solanaFacilitatorPrivateKey) {
-      throw new Error('FACILITATOR_SOLANA_PRIVATE_KEY not configured');
+      throw new Error('SOLANA_FACILITATOR_PRIVATE_KEY not configured');
     }
 
     const secretKey = bs58.decode(config.solanaFacilitatorPrivateKey);
@@ -239,17 +237,18 @@ export async function settleSolanaPaymentSponsored(
 
     return {
       success: true,
-      error: null,
-      txHash: signature,
-      networkId: 'solana-mainnet-beta',
+      payer: from,
+      transaction: signature,
+      network: 'solana-mainnet-beta',
     };
   } catch (error: any) {
     console.error('❌ Facilitator-sponsored settlement error:', error);
     return {
       success: false,
-      error: error.message,
-      txHash: null,
-      networkId: null,
+      payer: paymentPayload.from || 'unknown',
+      transaction: '',
+      network: 'solana-mainnet-beta',
+      errorReason: error.message,
     };
   }
 }

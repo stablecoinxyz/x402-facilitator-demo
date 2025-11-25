@@ -24,8 +24,8 @@ interface SolanaPaymentPayload {
 }
 
 interface PaymentRequirements {
-  maxAmount: string;
-  recipientAddress: string;
+  maxAmountRequired: string;
+  payTo: string;
 }
 
 /**
@@ -34,7 +34,7 @@ interface PaymentRequirements {
 export async function verifySolanaPayment(
   paymentPayload: SolanaPaymentPayload,
   paymentRequirements: PaymentRequirements
-): Promise<{ isValid: boolean; invalidReason: string | null }> {
+): Promise<{ isValid: boolean; payer: string; invalidReason: string | null }> {
   try {
     const { from, to, amount, nonce, deadline, signature } = paymentPayload;
 
@@ -59,36 +59,36 @@ export async function verifySolanaPayment(
 
       if (!isValidSig) {
         console.log('   ❌ Invalid Solana signature');
-        return { isValid: false, invalidReason: 'Invalid signature' };
+        return { isValid: false, payer: from, invalidReason: 'Invalid signature' };
       }
 
       console.log('   ✅ Signature valid (Ed25519)');
     } catch (error: any) {
       console.log('   ❌ Signature verification failed:', error.message);
-      return { isValid: false, invalidReason: 'Signature verification failed' };
+      return { isValid: false, payer: from, invalidReason: 'Signature verification failed' };
     }
 
     // 2. Check deadline
     const now = Math.floor(Date.now() / 1000);
     if (now > deadline) {
       console.log('   ❌ Payment expired');
-      return { isValid: false, invalidReason: 'Payment expired' };
+      return { isValid: false, payer: from, invalidReason: 'Payment expired' };
     }
 
     console.log('   ✅ Deadline valid');
 
     // 3. Check amount
-    if (BigInt(amount) < BigInt(paymentRequirements.maxAmount)) {
+    if (BigInt(amount) < BigInt(paymentRequirements.maxAmountRequired)) {
       console.log('   ❌ Insufficient amount');
-      return { isValid: false, invalidReason: 'Insufficient amount' };
+      return { isValid: false, payer: from, invalidReason: 'Insufficient amount' };
     }
 
     console.log('   ✅ Amount sufficient');
 
     // 4. Check recipient
-    if (to.toLowerCase() !== paymentRequirements.recipientAddress.toLowerCase()) {
+    if (to.toLowerCase() !== paymentRequirements.payTo.toLowerCase()) {
       console.log('   ❌ Invalid recipient');
-      return { isValid: false, invalidReason: 'Invalid recipient' };
+      return { isValid: false, payer: from, invalidReason: 'Invalid recipient' };
     }
 
     console.log('   ✅ Recipient valid');
@@ -114,20 +114,20 @@ export async function verifySolanaPayment(
 
       if (balance < BigInt(amount)) {
         console.log('   ❌ Insufficient SBC balance');
-        return { isValid: false, invalidReason: 'Insufficient SBC balance' };
+        return { isValid: false, payer: from, invalidReason: 'Insufficient SBC balance' };
       }
 
       console.log('   ✅ Balance sufficient');
     } catch (error: any) {
       console.log('   ❌ Error checking balance:', error.message);
-      return { isValid: false, invalidReason: `Balance check failed: ${error.message}` };
+      return { isValid: false, payer: from, invalidReason: `Balance check failed: ${error.message}` };
     }
 
     // All checks passed
-    return { isValid: true, invalidReason: null };
+    return { isValid: true, payer: from, invalidReason: null };
   } catch (error: any) {
     console.error('❌ Solana verification error:', error);
-    return { isValid: false, invalidReason: `Verification error: ${error.message}` };
+    return { isValid: false, payer: paymentPayload.from || 'unknown', invalidReason: `Verification error: ${error.message}` };
   }
 }
 

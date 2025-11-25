@@ -62,20 +62,26 @@ node check-solana-wallet.js <AGENT_ADDRESS>
 Add to your `.env` file:
 
 ```bash
-# Solana Facilitator (already configured)
-FACILITATOR_SOLANA_PRIVATE_KEY=<YOUR_FACILITATOR_PRIVATE_KEY>
-FACILITATOR_SOLANA_ADDRESS=<YOUR_FACILITATOR_ADDRESS>
+# Solana Merchant Wallet (receives payments)
+SOLANA_MERCHANT_ADDRESS=<YOUR_MERCHANT_ADDRESS>
 
-# Solana AI Agent (ADD THIS)
-AI_AGENT_SOLANA_PRIVATE_KEY=<YOUR_AGENT_PRIVATE_KEY>
-AI_AGENT_SOLANA_ADDRESS=<YOUR_AGENT_ADDRESS>
+# Solana Facilitator (executes transactions via SPL delegation, never holds funds)
+SOLANA_FACILITATOR_PRIVATE_KEY=<YOUR_FACILITATOR_PRIVATE_KEY>
+SOLANA_FACILITATOR_ADDRESS=<YOUR_FACILITATOR_ADDRESS>
+
+# Solana AI Agent (makes payments, must approve facilitator as delegate)
+SOLANA_AGENT_PRIVATE_KEY=<YOUR_AGENT_PRIVATE_KEY>
+SOLANA_AGENT_ADDRESS=<YOUR_AGENT_ADDRESS>
 
 # Solana RPC (e.g. helius)
 SOLANA_RPC_URL=<YOUR_SOLANA_RPC_URL>
 
+# SBC Token Address on Solana
+SBC_TOKEN_ADDRESS=DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA
+
 # Payment Settings
 SOLANA_PAYMENT_AMOUNT=50000000  # 0.05 SBC
-PREFERRED_PAYMENT_SCHEME='solana'
+PREFERRED_NETWORK='solana-mainnet-beta'
 
 # Enable real settlement
 ENABLE_REAL_SETTLEMENT='true'
@@ -83,7 +89,29 @@ ENABLE_REAL_SETTLEMENT='true'
 
 ---
 
-## 🚀 Step 4: Run End-to-End Test
+## 🔑 Step 4: One-Time Approval Setup
+
+**⚠️ CRITICAL:** Before making payments, approve the facilitator as a delegate:
+
+```bash
+cd /Users/e/code/sbc/x402/packages/ai-agent
+npm run approve-solana-facilitator
+```
+
+This approves the facilitator to execute SPL token transfers on behalf of your agent wallet.
+
+**Architecture:** The facilitator **never holds your funds** - it only executes atomic Agent → Merchant transfers.
+
+Expected output:
+```
+✅ DELEGATION SUCCESSFUL
+Transaction: <TX_HASH>
+The facilitator can now execute transfers on your behalf!
+```
+
+---
+
+## 🚀 Step 5: Run End-to-End Test
 
 ### Terminal 1: Start Facilitator
 ```bash
@@ -138,7 +166,7 @@ npm run start
 💰 Step 2: Payment Required!
    Payment requirements received:
    └─ Version: 1
-   └─ Schemes: scheme_exact_evm, scheme_exact_solana
+   └─ Networks: radius-testnet, base, solana-mainnet-beta
    └─ Solana Amount: 50000000 (0.05 SBC)
    └─ Recipient: 2mSjKVjzRGXcipq3DdJCijbepugfNSJCN1yVN2tgdw5K
 ```
@@ -146,7 +174,7 @@ npm run start
 ### 3. Payment Authorization Created
 ```
 ✍️  Step 3: Creating payment authorization...
-   Available payment schemes: scheme_exact_evm, scheme_exact_solana
+   Available payment networks: radius-testnet, base, solana-mainnet-beta
    Using Solana payment (preferred) 🟣
    Agent address (Solana): <YOUR_AGENT_ADDRESS>
    Payment to: 2mSjKVjzRGXcipq3DdJCijbepugfNSJCN1yVN2tgdw5K
@@ -158,7 +186,7 @@ npm run start
 ### 4. Facilitator Verifies Payment
 ```
 🔍 Verifying payment...
-   Scheme: scheme_exact_solana
+   Scheme: exact
    Network: solana-mainnet-beta
    🟣 Solana payment detected
    From (Solana): <YOUR_AGENT_ADDRESS>
@@ -174,14 +202,15 @@ npm run start
 ### 5. Facilitator Settles Payment
 ```
 💰 Settling payment...
-   Scheme: scheme_exact_solana
+   Scheme: exact
+   Network: solana-mainnet-beta
    🟣 Solana settlement
-   💰 FACILITATOR-SPONSORED SETTLEMENT
-   Facilitator will pay recipient directly
+   💰 DELEGATED TRANSFER (Non-Custodial)
+   Facilitator executes transfer: Agent → Merchant
    ⏳ Sending transaction...
    ✅ Transaction confirmed: <TX_SIGNATURE>
    🔗 Explorer: https://orb.helius.dev/tx/<TX_SIGNATURE>?cluster=mainnet-beta&tab=summary
-✅ Facilitator-sponsored settlement complete!
+✅ Delegated settlement complete!
 ```
 
 ### 6. Agent Receives Premium Data
@@ -189,15 +218,13 @@ npm run start
 📡 Step 4: Retrying request with payment...
    Status: 200 OK ✅
 
-🎉 SUCCESS! Premium data received:
-   ┌─────────────────────────────────────
-   │ Data: This is premium data from the API!
-   │ Tier: Premium
-   │ Payment Details:
-   │ └─ Tx Hash: <TX_SIGNATURE>
-   │ └─ Network: solana-mainnet-beta
-   │ └─ Message: Payment successful
-   └─────────────────────────────────────
+🎉 Success! Received premium data:
+{
+  "data": "This is premium data from the API!",
+  "paymentTxHash": "<TX_SIGNATURE>",
+  "networkId": "solana-mainnet-beta",
+  "message": "Payment successful"
+}
 
 🔗 View transaction:
    https://orb.helius.dev/tx/<TX_SIGNATURE>?cluster=mainnet-beta&tab=summary
@@ -219,7 +246,8 @@ https://orb.helius.dev/tx/<TX_SIGNATURE>?cluster=mainnet-beta&tab=summary
 **2. Check Balances:**
 
 - AI Agent (should have -0.05 SBC)
-- Facilitator (should have +0.05 SBC)
+- Merchant/Recipient (should have +0.05 SBC)
+- Facilitator (balance unchanged - never holds customer funds)
 
 ---
 
@@ -228,13 +256,13 @@ https://orb.helius.dev/tx/<TX_SIGNATURE>?cluster=mainnet-beta&tab=summary
 ### Test Solana Payment (default)
 ```bash
 # In .env
-PREFERRED_PAYMENT_SCHEME=solana
+PREFERRED_NETWORK=solana-mainnet-beta
 ```
 
 ### Test EVM Payment
 ```bash
 # In .env
-PREFERRED_PAYMENT_SCHEME=evm
+PREFERRED_NETWORK=radius-testnet
 
 # Make sure EVM wallets are funded on Radius testnet
 ```
@@ -249,11 +277,11 @@ PREFERRED_PAYMENT_SCHEME=evm
 ### Error: "Insufficient SOL for gas"
 - Fund AI agent wallet with SOL (0.01 minimum)
 
-### Error: "AI_AGENT_SOLANA_PRIVATE_KEY not configured"
-- Add agent's private key to .env
+### Error: "SOLANA_AGENT_PRIVATE_KEY not configured"
+- Add agent's private key to .env as `SOLANA_AGENT_PRIVATE_KEY`
 
 ### Error: "No compatible payment method available"
-- Check that PREFERRED_PAYMENT_SCHEME matches available options
+- Check that PREFERRED_NETWORK matches available options
 - Ensure corresponding wallet is configured in .env
 
 ---

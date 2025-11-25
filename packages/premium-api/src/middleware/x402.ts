@@ -4,27 +4,45 @@ import { config } from '../config';
 export function createPaymentRequirement() {
   const accepts: any[] = [];
 
-  // Add EVM payment option if configured
-  if (config.recipientAddress) {
+  // Add Radius payment option if configured
+  if (config.radiusMerchantAddress) {
     accepts.push({
-      scheme: 'scheme_exact_evm',
-      network: config.chainId.toString(),
-      maxAmount: config.paymentAmount,
-      recipientAddress: config.recipientAddress,
-      assetContract: '0x0000000000000000000000000000000000000000', // Native USD
-      timeout: config.paymentTimeout,
+      scheme: 'exact',
+      network: 'radius-testnet',
+      maxAmountRequired: config.radiusPaymentAmount,
+      payTo: config.radiusMerchantAddress, // Merchant receives payment
+      facilitator: config.radiusFacilitatorAddress, // Facilitator executes tx
+      asset: '0x0000000000000000000000000000000000000000', // Native USD
+      maxTimeoutSeconds: config.paymentTimeout,
+    });
+  }
+
+  // Add Base payment option if configured
+  if (config.baseMerchantAddress) {
+    const networkName = config.baseChainId === 8453 ? 'base' :
+                       config.baseChainId === 84532 ? 'base-sepolia' :
+                       config.baseChainId.toString();
+    accepts.push({
+      scheme: 'exact',
+      network: networkName,
+      maxAmountRequired: config.basePaymentAmount,
+      payTo: config.baseMerchantAddress, // Merchant receives payment
+      facilitator: config.baseFacilitatorAddress, // Facilitator executes tx
+      asset: config.baseSbcTokenAddress, // SBC token
+      maxTimeoutSeconds: config.paymentTimeout,
     });
   }
 
   // Add Solana payment option if configured
-  if (config.solanaRecipientAddress) {
+  if (config.solanaMerchantAddress) {
     accepts.push({
-      scheme: 'scheme_exact_solana',
+      scheme: 'exact',
       network: 'solana-mainnet-beta',
-      maxAmount: config.solanaPaymentAmount,
-      recipientAddress: config.solanaRecipientAddress,
-      assetContract: config.sbcTokenAddress, // SBC token
-      timeout: config.paymentTimeout,
+      maxAmountRequired: config.solanaPaymentAmount,
+      payTo: config.solanaMerchantAddress, // Merchant receives payment
+      facilitator: config.solanaFacilitatorAddress, // Facilitator sponsors/executes
+      asset: config.sbcTokenAddress, // SBC token
+      maxTimeoutSeconds: config.paymentTimeout,
     });
   }
 
@@ -39,17 +57,17 @@ export async function verifyWithFacilitator(
   paymentHeader: string,
   paymentRequirements: any
 ): Promise<{ isValid: boolean; invalidReason: string | null }> {
-  // Decode payment header to determine scheme
+  // Decode payment header to determine scheme and network
   const paymentData = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
-  const scheme = paymentData.scheme;
+  const { scheme, network } = paymentData;
 
-  // Find matching payment requirement
+  // Find matching payment requirement by scheme and network
   const matchingRequirement = paymentRequirements.accepts.find(
-    (req: any) => req.scheme === scheme
+    (req: any) => req.scheme === scheme && req.network === network
   );
 
   if (!matchingRequirement) {
-    throw new Error(`No matching payment requirement for scheme: ${scheme}`);
+    throw new Error(`No matching payment requirement for scheme: ${scheme}, network: ${network}`);
   }
 
   const response = await fetch(`${config.facilitatorUrl}/verify`, {
@@ -74,21 +92,22 @@ export async function settleWithFacilitator(
   paymentRequirements: any
 ): Promise<{
   success: boolean;
-  error: string | null;
-  txHash: string | null;
-  networkId: string | null;
+  errorReason?: string;
+  transaction: string;
+  network: string;
+  payer: string;
 }> {
-  // Decode payment header to determine scheme
+  // Decode payment header to determine scheme and network
   const paymentData = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
-  const scheme = paymentData.scheme;
+  const { scheme, network } = paymentData;
 
-  // Find matching payment requirement
+  // Find matching payment requirement by scheme and network
   const matchingRequirement = paymentRequirements.accepts.find(
-    (req: any) => req.scheme === scheme
+    (req: any) => req.scheme === scheme && req.network === network
   );
 
   if (!matchingRequirement) {
-    throw new Error(`No matching payment requirement for scheme: ${scheme}`);
+    throw new Error(`No matching payment requirement for scheme: ${scheme}, network: ${network}`);
   }
 
   const response = await fetch(`${config.facilitatorUrl}/settle`, {
@@ -107,8 +126,9 @@ export async function settleWithFacilitator(
 
   return (await response.json()) as {
     success: boolean;
-    error: string | null;
-    txHash: string | null;
-    networkId: string | null;
+    errorReason?: string;
+    transaction: string;
+    network: string;
+    payer: string;
   };
 }

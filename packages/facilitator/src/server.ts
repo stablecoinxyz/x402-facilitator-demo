@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config';
 import { verifyPayment } from './routes/verify';
 import { settlePayment } from './routes/settle';
+import { getSupportedNetworks } from './routes/supported';
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.get('/health', (req, res) => {
 });
 
 // x402 Facilitator endpoints
+app.get('/supported', getSupportedNetworks);
 app.post('/verify', verifyPayment);
 app.post('/settle', settlePayment);
 
@@ -24,10 +26,12 @@ app.listen(config.port, () => {
   console.log('\n🚀 SBC x402 Facilitator');
   console.log('========================');
   console.log(`✅ Server running on port ${config.port}`);
-  console.log(`✅ Chain: Radius Testnet (${config.chainId})`);
-  console.log(`✅ Recipient: ${config.recipientAddress}`);
+  console.log(`✅ Chain: Radius Testnet (${config.radiusChainId})`);
+  console.log(`✅ Chain: Base (${config.baseChainId})`);
+  console.log(`✅ Chain: Solana (mainnet-beta)`);
   console.log('\n📡 Endpoints:');
-  console.log(`   POST http://localhost:${config.port}/verify`);
-  console.log(`   POST http://localhost:${config.port}/settle`);
+  console.log(`   GET  http://localhost:${config.port}/supported (x402 Capability Discovery)`);
+  console.log(`   POST http://localhost:${config.port}/verify (Payment Verification)`);
+  console.log(`   POST http://localhost:${config.port}/settle (Payment Settlement)`);
   console.log('\n⏳ Waiting for payment requests...\n');
 });

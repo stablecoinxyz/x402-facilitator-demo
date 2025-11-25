@@ -1,15 +1,16 @@
 import { config } from './config';
 import { createPaymentAuthorization } from './x402-client';
+import { createBasePaymentAuthorization } from './base-client';
 import { createSolanaPaymentAuthorization } from './solana-client';
 
 // Type definitions
 interface PaymentRequirement {
   scheme: string;
   network: string;
-  maxAmount: string;
-  recipientAddress: string;
-  assetContract: string;
-  timeout: number;
+  maxAmountRequired: string;
+  payTo: string;
+  asset: string;
+  maxTimeoutSeconds: number;
 }
 
 interface PaymentRequiredResponse {
@@ -47,39 +48,49 @@ async function main() {
     console.log('   Payment requirements received:');
     console.log('   └─ Version:', paymentReq.x402Version);
     console.log('   └─ Scheme:', paymentReq.accepts[0].scheme);
-    console.log('   └─ Network:', paymentReq.accepts[0].network, '(Radius Testnet)');
-    console.log('   └─ Amount:', paymentReq.accepts[0].maxAmount, '(0.01 USD)');
-    console.log('   └─ Recipient:', paymentReq.accepts[0].recipientAddress);
-    console.log('   └─ Timeout:', paymentReq.accepts[0].timeout, 'seconds\n');
+    console.log('   └─ Network:', paymentReq.accepts[0].network);
+    console.log('   └─ Amount:', paymentReq.accepts[0].maxAmountRequired);
+    console.log('   └─ Recipient:', paymentReq.accepts[0].payTo);
+    console.log('   └─ Timeout:', paymentReq.accepts[0].maxTimeoutSeconds, 'seconds\n');
 
     // Step 3: Create payment authorization
     console.log('✍️  Step 3: Creating payment authorization...');
 
     // Determine which payment method to use
-    const availableSchemes = paymentReq.accepts.map((req: PaymentRequirement) => req.scheme);
-    console.log('   Available payment schemes:', availableSchemes.join(', '));
+    const availableNetworks = paymentReq.accepts.map((req: PaymentRequirement) => req.network);
+    console.log('   Available payment networks:', availableNetworks.join(', '));
 
     let xPaymentHeader: string;
     let usedScheme: string;
 
-    // Check for Solana option first (if preferred)
-    const hasSolana = availableSchemes.includes('scheme_exact_solana');
-    const hasEVM = availableSchemes.includes('scheme_exact_evm');
+    // Check for available options
+    const hasSolana = availableNetworks.includes('solana-mainnet-beta');
+    const hasBase = availableNetworks.some(n => n === 'base' || n === 'base-sepolia' || n === '8453' || n === '84532');
+    const hasRadius = availableNetworks.some(n => n === 'radius-testnet' || n === '1223953');
 
-    if (config.preferredScheme === 'solana' && hasSolana) {
+    // Use preferred network if available
+    if (config.preferredNetwork === 'solana-mainnet-beta' && hasSolana && config.solanaAgentPrivateKey) {
       console.log('   Using Solana payment (preferred) 🟣');
       xPaymentHeader = await createSolanaPaymentAuthorization(paymentReq);
       usedScheme = 'solana';
-    } else if (config.preferredScheme === 'evm' && hasEVM) {
-      console.log('   Using EVM payment (preferred) 🔵');
+    } else if ((config.preferredNetwork === 'base' || config.preferredNetwork === 'base-sepolia') && hasBase && config.baseAgentPrivateKey) {
+      console.log('   Using Base payment (preferred) 🔵');
+      xPaymentHeader = await createBasePaymentAuthorization(paymentReq);
+      usedScheme = 'base';
+    } else if (config.preferredNetwork === 'radius-testnet' && hasRadius && config.radiusAgentPrivateKey) {
+      console.log('   Using Radius payment (preferred) 🔵');
       xPaymentHeader = await createPaymentAuthorization(paymentReq);
       usedScheme = 'evm';
-    } else if (hasSolana && config.agentSolanaPrivateKey) {
+    } else if (hasSolana && config.solanaAgentPrivateKey) {
       console.log('   Using Solana payment (available) 🟣');
       xPaymentHeader = await createSolanaPaymentAuthorization(paymentReq);
       usedScheme = 'solana';
-    } else if (hasEVM && config.agentPrivateKey) {
-      console.log('   Using EVM payment (available) 🔵');
+    } else if (hasBase && config.baseAgentPrivateKey) {
+      console.log('   Using Base payment (available) 🔵');
+      xPaymentHeader = await createBasePaymentAuthorization(paymentReq);
+      usedScheme = 'base';
+    } else if (hasRadius && config.radiusAgentPrivateKey) {
+      console.log('   Using Radius payment (available) 🔵');
       xPaymentHeader = await createPaymentAuthorization(paymentReq);
       usedScheme = 'evm';
     } else {
@@ -119,8 +130,14 @@ async function main() {
       console.log('🔗 View transaction:');
       if (data.networkId === 'solana-mainnet-beta') {
         console.log(`   https://orb.helius.dev/tx/${data.paymentTxHash}?cluster=mainnet-beta&tab=summary\n`);
-      } else {
+      } else if (data.networkId === 'base' || data.networkId === '8453') {
+        console.log(`   https://basescan.org/tx/${data.paymentTxHash}\n`);
+      } else if (data.networkId === 'base-sepolia' || data.networkId === '84532') {
+        console.log(`   https://sepolia.basescan.org/tx/${data.paymentTxHash}\n`);
+      } else if (data.networkId === 'radius-testnet' || data.networkId === '1223953') {
         console.log(`   https://testnet.radiustech.xyz/testnet/explorer?view=tx-details&hash=${data.paymentTxHash}\n`);
+      } else {
+        console.log(`   Network ${data.networkId}: ${data.paymentTxHash}\n`);
       }
 
       console.log('✅ AI Agent completed successfully!\n');

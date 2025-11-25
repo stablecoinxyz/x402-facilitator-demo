@@ -65,15 +65,15 @@ app.get('/premium-data', async (req, res) => {
     const settleResult = await settleWithFacilitator(xPayment, paymentRequirements);
 
     if (!settleResult.success) {
-      console.log('   ❌ Settlement failed:', settleResult.error);
+      console.log('   ❌ Settlement failed:', settleResult.errorReason);
       return res.status(500).json({
         error: 'Settlement failed',
-        reason: settleResult.error,
+        reason: settleResult.errorReason,
       });
     }
 
     console.log('   ✅ Payment settled');
-    console.log('   📝 Tx Hash:', settleResult.txHash);
+    console.log('   📝 Tx Hash:', settleResult.transaction);
     console.log('   → Returning premium data\n');
 
     // Payment successful, return premium data
@@ -86,8 +86,8 @@ app.get('/premium-data', async (req, res) => {
         'Priority support',
         'API rate limit: 1000 req/min',
       ],
-      paymentTxHash: settleResult.txHash,
-      networkId: settleResult.networkId,
+      paymentTxHash: settleResult.transaction,
+      networkId: settleResult.network,
       message: 'Payment successful - thank you!',
     });
   } catch (error: any) {
@@ -105,7 +105,7 @@ app.listen(config.port, () => {
   console.log('==================================');
   console.log(`✅ Server running on port ${config.port}`);
   console.log(`✅ Facilitator: ${config.facilitatorUrl}`);
-  console.log(`✅ Payment: ${config.paymentAmount} USD per request`);
+  console.log(`✅ Payment: ${(Number(config.paymentAmount) / 10 ** 18).toFixed(2)} (${config.paymentAmount}) USD per request`);
   console.log('\n📡 Endpoints:');
   console.log(`   GET http://localhost:${config.port}/free-data (no payment)`);
   console.log(`   GET http://localhost:${config.port}/premium-data (requires payment)`);

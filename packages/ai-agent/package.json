@@ -6,9 +6,12 @@
   "scripts": {
     "start": "tsx src/agent.ts",
     "build": "tsc",
-    "run": "node dist/agent.js"
+    "run": "node dist/agent.js",
+    "approve-base-facilitator": "tsx approve-facilitator.ts",
+    "approve-solana-facilitator": "tsx approve-solana-facilitator.ts"
   },
   "dependencies": {
+    "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.2",
     "bs58": "^5.0.0",
     "dotenv": "^16.3.1",
