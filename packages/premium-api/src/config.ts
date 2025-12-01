@@ -16,9 +16,9 @@ export const config = {
   // Base Configuration
   baseMerchantAddress: process.env.BASE_MERCHANT_ADDRESS || '', // Merchant receives payment
   baseFacilitatorAddress: process.env.BASE_FACILITATOR_ADDRESS || '', // Facilitator executes tx
-  basePaymentAmount: process.env.BASE_PAYMENT_AMOUNT || '10000000000000000', // 0.01 SBC (18 decimals for mainnet)
-  baseChainId: parseInt(process.env.BASE_CHAIN_ID || '8453'), // 8453 = mainnet, 84532 = sepolia
-  baseSbcTokenAddress: process.env.BASE_SBC_TOKEN_ADDRESS || '0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798', // mainnet
+  basePaymentAmount: process.env.BASE_PAYMENT_AMOUNT || '10000', // $0.01 SBC (6 decimals for sepolia, 18 for mainnet)
+  baseChainId: parseInt(process.env.BASE_CHAIN_ID || '84532'), // 8453 = mainnet, 84532 = sepolia
+  baseSbcTokenAddress: process.env.BASE_SBC_TOKEN_ADDRESS || '0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16', // sepolia default
 
   // Solana Configuration
   solanaMerchantAddress: process.env.SOLANA_MERCHANT_ADDRESS || '', // Merchant receives payment

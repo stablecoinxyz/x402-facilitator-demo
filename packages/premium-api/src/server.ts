@@ -32,9 +32,12 @@ app.get('/premium-data', async (req, res) => {
 
   console.log('\n📡 Premium data request received');
 
+  // Build the full resource URL
+  const resource = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+
   // If no payment header, return 402 Payment Required
   if (!xPayment) {
-    const paymentReq = createPaymentRequirement();
+    const paymentReq = createPaymentRequirement(resource);
     console.log('   ❌ No payment provided');
     console.log('   → Returning 402 Payment Required\n');
 
@@ -45,7 +48,7 @@ app.get('/premium-data', async (req, res) => {
   console.log('   → Verifying with facilitator...');
 
   try {
-    const paymentRequirements = createPaymentRequirement();
+    const paymentRequirements = createPaymentRequirement(resource);
 
     // Verify payment with facilitator
     const verifyResult = await verifyWithFacilitator(xPayment, paymentRequirements);
@@ -99,13 +102,12 @@ app.get('/premium-data', async (req, res) => {
   }
 });
 
-// Start server
-app.listen(config.port, () => {
+// Start server - bind to 0.0.0.0 to accept both IPv4 and IPv6 connections
+app.listen(config.port, '0.0.0.0', () => {
   console.log('\n🌟 Premium API with x402 Payments');
   console.log('==================================');
-  console.log(`✅ Server running on port ${config.port}`);
+  console.log(`✅ Server running on port ${config.port} (0.0.0.0)`);
   console.log(`✅ Facilitator: ${config.facilitatorUrl}`);
-  console.log(`✅ Payment: ${(Number(config.paymentAmount) / 10 ** 18).toFixed(2)} (${config.paymentAmount}) USD per request`);
   console.log('\n📡 Endpoints:');
   console.log(`   GET http://localhost:${config.port}/free-data (no payment)`);
   console.log(`   GET http://localhost:${config.port}/premium-data (requires payment)`);

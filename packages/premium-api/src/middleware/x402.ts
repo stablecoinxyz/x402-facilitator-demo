@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { config } from '../config';
 
-export function createPaymentRequirement() {
+export function createPaymentRequirement(resource: string) {
   const accepts: any[] = [];
 
   // Add Radius payment option if configured
@@ -10,6 +10,7 @@ export function createPaymentRequirement() {
       scheme: 'exact',
       network: 'radius-testnet',
       maxAmountRequired: config.radiusPaymentAmount,
+      resource, // URL of the resource being paid for
       payTo: config.radiusMerchantAddress, // Merchant receives payment
       facilitator: config.radiusFacilitatorAddress, // Facilitator executes tx
       asset: '0x0000000000000000000000000000000000000000', // Native USD
@@ -26,6 +27,7 @@ export function createPaymentRequirement() {
       scheme: 'exact',
       network: networkName,
       maxAmountRequired: config.basePaymentAmount,
+      resource, // URL of the resource being paid for
       payTo: config.baseMerchantAddress, // Merchant receives payment
       facilitator: config.baseFacilitatorAddress, // Facilitator executes tx
       asset: config.baseSbcTokenAddress, // SBC token
@@ -39,6 +41,7 @@ export function createPaymentRequirement() {
       scheme: 'exact',
       network: 'solana-mainnet-beta',
       maxAmountRequired: config.solanaPaymentAmount,
+      resource, // URL of the resource being paid for
       payTo: config.solanaMerchantAddress, // Merchant receives payment
       facilitator: config.solanaFacilitatorAddress, // Facilitator sponsors/executes
       asset: config.sbcTokenAddress, // SBC token

@@ -13,7 +13,8 @@
     "install:agent": "cd packages/ai-agent && npm install",
     "dev:facilitator": "cd packages/facilitator && npm run dev",
     "dev:api": "cd packages/premium-api && npm run dev",
-    "run:agent": "cd packages/ai-agent && npm run start"
+    "run:agent": "cd packages/ai-agent && npm run start",
+    "approve-base-sepolia-facilitator": "cd packages/ai-agent && npm run approve-base-sepolia-facilitator"
   },
   "keywords": [
     "x402",

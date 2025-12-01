@@ -40,6 +40,24 @@ const baseMainnet = {
   testnet: false,
 };
 
+// Base Sepolia Chain Config
+const baseSepolia = {
+  id: 84532,
+  name: 'Base Sepolia',
+  network: 'base-sepolia',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Sepolia Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://sepolia.base.org'],
+    },
+  },
+  testnet: true,
+};
+
 export async function settlePayment(req: Request, res: Response) {
   try {
     const { paymentHeader, paymentRequirements } = req.body;
@@ -75,7 +93,9 @@ export async function settlePayment(req: Request, res: Response) {
     }
 
     // Handle EVM-based payments (Radius or Base)
-    const isBase = paymentData.network === 'base' || paymentData.network === 'base-sepolia' || paymentData.network === '8453' || paymentData.network === '84532';
+    const isBaseSepolia = paymentData.network === 'base-sepolia' || paymentData.network === '84532';
+    const isBaseMainnet = paymentData.network === 'base' || paymentData.network === '8453';
+    const isBase = isBaseSepolia || isBaseMainnet;
     const isRadius = paymentData.network === 'radius-testnet' || paymentData.network === '1223953';
 
     if (!isBase && !isRadius) {
@@ -89,7 +109,7 @@ export async function settlePayment(req: Request, res: Response) {
       });
     }
 
-    console.log(isBase ? '   🔵 Base settlement' : '   🔵 Radius settlement');
+    console.log(isBaseSepolia ? '   🔵 Base Sepolia settlement' : isBaseMainnet ? '   🔵 Base Mainnet settlement' : '   🔵 Radius settlement');
 
     const { from, to, amount } = paymentData.payload;
 
@@ -97,12 +117,23 @@ export async function settlePayment(req: Request, res: Response) {
     console.log('   To:', to);
     console.log('   Amount:', amount);
 
-    // Select chain config and credentials based on scheme
-    const chain = isBase ? baseMainnet : radiusTestnet;
+    // Select chain config and credentials based on network
+    let chain, rpcUrl, chainName;
+    if (isBaseSepolia) {
+      chain = baseSepolia;
+      rpcUrl = 'https://sepolia.base.org';
+      chainName = 'Base Sepolia';
+    } else if (isBaseMainnet) {
+      chain = baseMainnet;
+      rpcUrl = config.baseRpcUrl;
+      chainName = 'Base Mainnet';
+    } else {
+      chain = radiusTestnet;
+      rpcUrl = config.radiusRpcUrl;
+      chainName = 'Radius testnet';
+    }
     const privateKey = isBase ? config.baseFacilitatorPrivateKey : config.radiusFacilitatorPrivateKey;
-    const rpcUrl = isBase ? config.baseRpcUrl : config.radiusRpcUrl;
-    const chainId = isBase ? config.baseChainId : config.radiusChainId;
-    const chainName = isBase ? 'Base' : 'Radius testnet';
+    const chainId = chain.id;
 
     // Create facilitator account
     const account = privateKeyToAccount(privateKey as `0x${string}`);
@@ -151,8 +182,15 @@ export async function settlePayment(req: Request, res: Response) {
           }
         ] as const;
 
+        // Use correct SBC token address for network
+        const sbcTokenAddress = isBaseSepolia
+          ? '0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16'  // Base Sepolia (6 decimals)
+          : config.baseSbcTokenAddress;                    // Base Mainnet (18 decimals)
+
+        console.log('   Token:', sbcTokenAddress);
+
         const hash = await walletClient.writeContract({
-          address: config.baseSbcTokenAddress as `0x${string}`,
+          address: sbcTokenAddress as `0x${string}`,
           abi: ERC20_ABI,
           functionName: 'transferFrom',
           args: [
