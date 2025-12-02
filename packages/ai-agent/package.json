@@ -7,7 +7,7 @@
     "start": "tsx src/agent.ts",
     "build": "tsc",
     "run": "node dist/agent.js",
-    "approve-base-facilitator": "tsx approve-facilitator.ts",
+    "approve-base-facilitator": "tsx approve-base-facilitator.ts",
     "approve-base-sepolia-facilitator": "tsx approve-base-sepolia-facilitator.ts",
     "approve-solana-facilitator": "tsx approve-solana-facilitator.ts"
   },

@@ -46,8 +46,9 @@ You can use existing Ethereum wallets or generate new ones:
 ### Option A: Using Existing Wallets
 
 If you have MetaMask or another Ethereum wallet, export your private keys:
-- Facilitator wallet (receives payments)
-- Agent wallet (makes payments)
+- Facilitator wallet (sponsors payments from its own USD balance)
+- Agent wallet (signs payment authorizations)
+- Merchant wallet (receives payments)
 
 ### Option B: Generate New Wallets
 
@@ -72,20 +73,22 @@ console.log('  Private Key:', agent.privateKey);
 
 ## Step 3: Fund Wallets with Testnet USD
 
+On Radius, the native token is USD. Unlike ERC-20 tokens, native tokens don't support `transferFrom`. To maintain non-custodial properties, the agent creates and signs the full native token transfer transaction, and the facilitator broadcasts it.
+
 1. **Visit Radius Testnet Faucet:**
    ```
    https://testnet.radiustech.xyz/testnet/faucet
    ```
 
-2. **Request Testnet USD:**
-   - Enter your facilitator address
-   - Request testnet USD (usually get 10-100 USD)
-   - Wait for confirmation (~2-5 seconds)
-
-3. **Repeat for Agent Wallet:**
+2. **Fund Agent Wallet:**
    - Enter your agent address
-   - Request testnet USD
-   - Wait for confirmation
+   - Request testnet USD (usually get 10-100 USD)
+   - Agent needs: USD for payments + gas fees
+   - Minimum: 0.02 USD per payment (0.01 payment + gas)
+
+3. **Fund Facilitator Wallet (optional):**
+   - Facilitator only needs minimal USD for failed transaction retries
+   - The facilitator does NOT pay from its own balance - it broadcasts the agent's signed transaction
 
 4. **Verify on Explorer:**
    ```
@@ -269,7 +272,9 @@ Payment requirements: {
    Payment to: 0xabcd...ef01
    Amount: 10000000000000000 (0.01 USD)
    Deadline: 2025-11-24T20:45:30.000Z
-   Signature: 0x1234...abcd
+   📝 Creating signed native token transaction...
+   ✅ Transaction signed by agent
+   Signed tx: 0xf86c0b8502540be400...
 ✅ Payment authorized!
 
 📡 Retrying request with payment...
@@ -282,7 +287,9 @@ Payment requirements: {
    To: 0xabcd...ef01
    Amount: 10000000000000000
    Deadline: 2025-11-24T20:45:30.000Z
-   ✅ Signature valid
+   📝 Verifying signed transaction...
+   ✅ Signed transaction valid
+   ✅ Transaction matches claimed payment details
    ✅ Deadline valid
    ✅ Amount sufficient
    ✅ Recipient valid
@@ -297,6 +304,8 @@ Payment requirements: {
    From: 0x1234...5678
    To: 0xabcd...ef01
    Amount: 10000000000000000
+   💵 Native token transfer (USD)
+   📝 Agent signed transaction - Facilitator broadcasting
    Executing transfer on Radius testnet...
    ⚠️  SIMULATED MODE - Set ENABLE_REAL_SETTLEMENT=true for real transactions
    ✅ Simulated tx hash: 0x9876543210abcdef...
@@ -362,14 +371,15 @@ curl -X POST https://rpc.testnet.radiustech.xyz/YOUR_API_KEY \
 # 3. Check Radius status page for outages
 ```
 
-### Error: "Signature verification failed"
+### Error: "Transaction verification failed" or "Invalid signed transaction"
 
-**Problem:** Private key mismatch or wrong chain ID
+**Problem:** Signed transaction doesn't match claimed payment details
 
 **Solution:**
 1. Verify `RADIUS_AGENT_PRIVATE_KEY` matches `RADIUS_AGENT_ADDRESS`
 2. Verify chain ID is `1223953` (Radius testnet)
-3. Check that agent is using correct signer
+3. Check that recipient, amount, and chain ID in the signed transaction match the payment payload
+4. Ensure nonce hasn't been used (check on-chain)
 
 ```bash
 # Verify address from private key
@@ -488,15 +498,6 @@ Once Radius testnet works:
 **Explorers:**
 - Radius Testnet Explorer: https://testnet.radiustech.xyz/testnet/explorer
 
-**Tools:**
-- Foundry (cast): https://book.getfoundry.sh/
-- Hardhat: https://hardhat.org/
-- Remix IDE: https://remix.ethereum.org/
-
-**Community:**
-- Radius Discord: https://discord.gg/radiusnetwork
-- Radius Twitter: https://twitter.com/radius_xyz
-
 ---
 
 ## Support
@@ -513,5 +514,3 @@ Once Radius testnet works:
 - Sign up at https://radiustech.xyz
 
 ---
-
-**Happy testing! 🚀**

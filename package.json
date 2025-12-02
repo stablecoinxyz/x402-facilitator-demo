@@ -14,7 +14,9 @@
     "dev:facilitator": "cd packages/facilitator && npm run dev",
     "dev:api": "cd packages/premium-api && npm run dev",
     "run:agent": "cd packages/ai-agent && npm run start",
-    "approve-base-sepolia-facilitator": "cd packages/ai-agent && npm run approve-base-sepolia-facilitator"
+    "approve-base-facilitator": "cd packages/ai-agent && npm run approve-base-facilitator",
+    "approve-base-sepolia-facilitator": "cd packages/ai-agent && npm run approve-base-sepolia-facilitator",
+    "approve-solana-facilitator": "cd packages/ai-agent && npm run approve-solana-facilitator"
   },
   "keywords": [
     "x402",

@@ -71,10 +71,16 @@ cp .env.example .env
 
 **⚠️ IMPORTANT:** Before making payments on Base or Solana, you must approve the facilitator as a delegate:
 
-**For Base:**
+**For Base Mainnet:**
 ```bash
 cd packages/ai-agent
 npm run approve-base-facilitator
+```
+
+**For Base Sepolia (testnet):**
+```bash
+cd packages/ai-agent
+npm run approve-base-sepolia-facilitator
 ```
 
 **For Solana:**
@@ -85,7 +91,7 @@ npm run approve-solana-facilitator
 
 This allows the facilitator to execute token transfers on behalf of your agent wallet. The facilitator **never holds your funds** - it only executes atomic transfers from Agent → Merchant.
 
-**Note:** Radius (EVM) does not require approval setup.
+**Note:** Radius uses native tokens (not ERC-20), so no approval step is needed. Instead, the agent creates and signs the full native token transfer transaction, which the facilitator then broadcasts. This maintains non-custodial properties - the agent's funds flow directly to the merchant.
 
 ### 4. Start Services
 
@@ -180,17 +186,27 @@ GET /premium-data
 
 ### Step 2: Agent Creates Payment Authorization
 
-**For EVM (Radius):**
+**For Radius (Native USD):**
+```typescript
+// Agent signs the complete native transfer transaction
+const signedTx = await walletClient.signTransaction({
+  to: merchantAddress,
+  value: parseEther('0.01'),
+  nonce, gasPrice, gas: 21000n, chainId: 1223953
+});
+```
+
+**For Base (ERC-20):**
 ```typescript
 // EIP-712 signature
 const signature = await wallet.signTypedData({
-  domain: { name: 'SBC x402 Facilitator', version: '1', chainId: 1223953 },
+  domain: { name: 'SBC x402 Facilitator', version: '1', chainId: 8453 },
   types: { Payment: [...] },
   message: { from, to, amount, nonce, deadline }
 });
 ```
 
-**For Solana:**
+**For Solana (SPL):**
 ```typescript
 // Ed25519 signature
 const message = `from:${from}|to:${to}|amount:${amount}|nonce:${nonce}|deadline:${deadline}`;
@@ -341,3 +357,11 @@ x402-poc/
 - **[BASE_TEST_GUIDE.md](./BASE_TEST_GUIDE.md)** - Complete Base testing guide (Mainnet & Sepolia)
 - **[SOLANA_TEST_GUIDE.md](./SOLANA_TEST_GUIDE.md)** - Complete Solana testing guide
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Detailed architecture documentation
+
+### Additional References
+
+See the `/debug` folder for supplementary documentation:
+- **FAQ.md** - Common questions and answers
+- **MULTI_CHAIN_ARCHITECTURE.md** - Chain-specific implementation details
+- **PAYMENT_FLOW_ANALYSIS.md** - Deep dive into payment flow
+- **EXPLORER_URLS.md** - Block explorer references for all networks

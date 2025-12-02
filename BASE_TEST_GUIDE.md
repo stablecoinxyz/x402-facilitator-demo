@@ -69,10 +69,10 @@ console.log('  Private Key:', agent.privateKey);
    - Minimum: ~0.001 ETH per wallet
 
 2. **Get SBC Tokens:**
-   - Contact SBC team for tokens
-   - Or swap ETH → SBC on Base DEX (if available)
-   - Facilitator needs: 1+ SBC (to receive payments)
+   - Swap USDC → SBC on Uniswap (https://swap.stablecoin.xyz)
    - Agent needs: 0.1+ SBC (to make test payments)
+   - Merchant receives payments (no SBC needed upfront)
+   - Facilitator only needs ETH for gas (no SBC needed)
 
 ### Base Sepolia (Testnet)
 
@@ -84,82 +84,48 @@ console.log('  Private Key:', agent.privateKey);
    - Contact SBC team for testnet tokens
    - Or use SBC faucet (https://dashboard.stablecoin.xyz/faucet)
 
-3. **Bridge to Base Sepolia:**
-   - Use Base Sepolia Bridge: https://bridge.base.org/deposit?network=base-sepolia
-
 ---
 
 ## Step 3: Check Balances
 
-Create a script to check your balances:
+### For Base Mainnet
 
 ```bash
-# Create check-base-balance.js
-cat > check-base-balance.js << 'EOF'
-const { ethers } = require('ethers');
+# Check balance on Base Mainnet using Foundry
+# Uses: Chain ID 8453, Token 0xfdcC...0798 (18 decimals)
+cast call 0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798 \
+  "balanceOf(address)(uint256)" 0xYourAgentAddress \
+  --rpc-url https://mainnet.base.org
 
-const BASE_CHAIN_ID = process.env.BASE_CHAIN_ID || '8453';
-const RPC_URL = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
-const SBC_TOKEN = process.env.BASE_SBC_TOKEN_ADDRESS || '0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798';
-const DECIMALS = parseInt(process.env.BASE_SBC_DECIMALS || '18');
-const ADDRESS = process.env.ADDRESS;
-
-const ERC20_ABI = [
-  'function balanceOf(address owner) view returns (uint256)',
-  'function decimals() view returns (uint8)',
-  'function symbol() view returns (string)'
-];
-
-async function checkBalance() {
-  if (!ADDRESS) {
-    console.error('Usage: ADDRESS=0x... node check-base-balance.js');
-    process.exit(1);
-  }
-
-  const provider = new ethers.JsonRpcProvider(RPC_URL);
-  const contract = new ethers.Contract(SBC_TOKEN, ERC20_ABI, provider);
-
-  console.log(`\n🔍 Checking balances on Base (Chain ID: ${BASE_CHAIN_ID})`);
-  console.log(`   Address: ${ADDRESS}`);
-  console.log(`   SBC Token: ${SBC_TOKEN}\n`);
-
-  // Check ETH balance
-  const ethBalance = await provider.getBalance(ADDRESS);
-  console.log(`💎 ETH Balance: ${ethers.formatEther(ethBalance)} ETH`);
-
-  // Check SBC balance
-  const sbcBalance = await contract.balanceOf(ADDRESS);
-  const symbol = await contract.symbol();
-  console.log(`💰 ${symbol} Balance: ${ethers.formatUnits(sbcBalance, DECIMALS)} ${symbol}`);
-  console.log();
-}
-
-checkBalance().catch(console.error);
-EOF
-
-# Install ethers if not installed
-npm install ethers
-
-# Check facilitator balance (mainnet)
-ADDRESS=0xYourFacilitatorAddress node check-base-balance.js
-
-# Check agent balance (mainnet)
-ADDRESS=0xYourAgentAddress node check-base-balance.js
-
-# Check on Sepolia
-BASE_CHAIN_ID=84532 \
-BASE_RPC_URL=https://sepolia.base.org \
-BASE_SBC_TOKEN_ADDRESS=0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16 \
-BASE_SBC_DECIMALS=6 \
-ADDRESS=0xYourAddress \
-node check-base-balance.js
+# Or check on BaseScan:
+# https://basescan.org/address/0xYourAgentAddress#tokentxns
 ```
 
-**Expected Output:**
+### For Base Sepolia (Testnet)
+
+```bash
+# Check balance on Base Sepolia
+# Uses: Chain ID 84532, Token 0xf9FB...0F16 (6 decimals)
+cast call 0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16 \
+  "balanceOf(address)(uint256)" 0xYourAgentAddress \
+  --rpc-url https://sepolia.base.org
+
+# Or check on Sepolia BaseScan:
+# https://sepolia.basescan.org/address/0xYourAgentAddress#tokentxns
+```
+
+### Quick Reference
+
+| Network | Chain ID | SBC Token | Decimals | RPC |
+|---------|----------|-----------|----------|-----|
+| **Mainnet** | 8453 | `0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798` | 18 | `https://mainnet.base.org` |
+| **Sepolia** | 84532 | `0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16` | 6 | `https://sepolia.base.org` |
+
+**Expected Output (Mainnet):**
 ```
 🔍 Checking balances on Base (Chain ID: 8453)
    Address: 0x1234...5678
-   SBC Token: 0xfdcC...80798
+   SBC Token: 0xfdcC...0798 (18 decimals)
 
 💎 ETH Balance: 0.005 ETH
 💰 SBC Balance: 1.5 SBC
@@ -232,9 +198,16 @@ ENABLE_REAL_SETTLEMENT=true
 
 **⚠️ CRITICAL:** Before making payments, approve the facilitator as a delegate:
 
+**For Base Mainnet:**
 ```bash
 cd packages/ai-agent
 npm run approve-base-facilitator
+```
+
+**For Base Sepolia (testnet):**
+```bash
+cd packages/ai-agent
+npm run approve-base-sepolia-facilitator
 ```
 
 This approves the facilitator to execute ERC-20 `transferFrom()` calls on behalf of your agent wallet.
@@ -397,7 +370,7 @@ You should see:
 - ✅ From: Agent address
 - ✅ To: SBC Token Contract
 - ✅ Method: Transfer
-- ✅ Token Transfer: 0.01 SBC from Agent → Facilitator
+- ✅ Token Transfer: 0.01 SBC from Agent → Merchant
 
 ---
 

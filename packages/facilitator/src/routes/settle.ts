@@ -4,6 +4,27 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { config } from '../config';
 import { settleSolanaPayment } from '../solana/settle';
 
+/**
+ * Payment Settlement Handler
+ *
+ * Executes on-chain transfers for multiple networks:
+ *
+ * - Solana: Delegated SPL token transfer (handled by solana/settle.ts)
+ *   Facilitator executes transfer as delegate: Agent → Merchant
+ *
+ * - Base: ERC-20 transferFrom
+ *   Facilitator calls transferFrom(agent, merchant, amount) using prior approval
+ *   Tokens flow: Agent → Merchant (facilitator never holds funds)
+ *
+ * - Radius: Broadcast pre-signed transaction
+ *   Agent signs the native USD transfer transaction beforehand
+ *   Facilitator broadcasts it (cannot modify recipient/amount)
+ *   Tokens flow: Agent → Merchant (non-custodial)
+ *
+ * All settlement methods maintain non-custodial properties - the facilitator
+ * never holds customer funds.
+ */
+
 // Radius Testnet Chain Config
 const radiusTestnet = {
   id: 1223953,
@@ -215,18 +236,24 @@ export async function settlePayment(req: Request, res: Response) {
         console.log(`✅ Settlement complete on ${chainName}!\n`);
       } else {
         // EVM (Radius): Native token transfer
-        // Note: For native tokens, we can't use transferFrom (no ERC-20)
-        // Agent must send transaction directly, or use account abstraction
+        // Agent signs the transaction, facilitator broadcasts it (non-custodial)
         console.log('   💵 Native token transfer (USD)');
-        console.log('   ⚠️  Native tokens require agent to send tx directly');
+        console.log('   📝 Agent signed transaction - Facilitator broadcasting');
         console.log('   From (Agent):', from);
         console.log('   To (Merchant):', to);
 
-        // For now, facilitator sends from its own balance (sponsored)
-        // TODO: Implement account abstraction or require agent to send tx
-        const hash = await walletClient.sendTransaction({
-          to: to as `0x${string}`,
-          value: BigInt(amount),
+        // Get signed transaction from payload
+        const signedTransaction = paymentData.payload.signedTransaction;
+        if (!signedTransaction) {
+          throw new Error('No signed transaction provided for Radius payment. Agent must sign the native token transfer.');
+        }
+
+        console.log('   Signed tx:', signedTransaction.slice(0, 30) + '...');
+
+        // Broadcast the agent's pre-signed transaction
+        // Facilitator cannot modify this - it's already signed by the agent
+        const hash = await publicClient.sendRawTransaction({
+          serializedTransaction: signedTransaction as `0x${string}`,
         });
 
         txHash = hash;
@@ -241,6 +268,7 @@ export async function settlePayment(req: Request, res: Response) {
         console.log('   ✅ Real tx hash:', txHash);
         console.log('   ✅ Block number:', receipt.blockNumber);
         console.log('   ✅ Gas used:', receipt.gasUsed);
+        console.log('   ✅ Agent paid from own balance (non-custodial)');
         console.log(`✅ Settlement complete on ${chainName}!\n`);
       }
     } else {

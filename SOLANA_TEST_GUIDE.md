@@ -1,13 +1,5 @@
 # Solana Payment Testing Guide
 
-## ✅ What's Complete
-
-Your x402 facilitator now supports **both EVM and Solana** payments:
-
-- ✅ **Facilitator** - Verifies and settles payments on both chains
-- ✅ **Premium API** - Offers both payment options
-- ✅ **AI Agent** - Intelligently chooses payment method
-
 ---
 
 ## 🎯 Testing Solana Payments
@@ -15,10 +7,15 @@ Your x402 facilitator now supports **both EVM and Solana** payments:
 ### Prerequisites
 
 1. **Facilitator Wallet**
-   - Must have: 0.02 SOL + 0.05 SBC
+   - Must have: 0.02 SOL (for gas to execute delegated transfers)
+   - Does NOT need SBC (never holds customer funds)
 
 2. **AI Agent Wallet** (You need to create/fund this)
    - Must have: 0.01 SOL (for gas) + 0.05 SBC (for payment)
+   - Must approve facilitator as delegate (one-time setup)
+
+3. **Merchant Wallet**
+   - Receives SBC payments (no upfront funding needed)
 
 ---
 
@@ -81,7 +78,7 @@ SBC_TOKEN_ADDRESS=DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA
 
 # Payment Settings
 SOLANA_PAYMENT_AMOUNT=50000000  # 0.05 SBC
-PREFERRED_NETWORK='solana-mainnet-beta'
+PREFERRED_NETWORK='solana-mainnet-beta' 
 
 # Enable real settlement
 ENABLE_REAL_SETTLEMENT='true'
@@ -251,24 +248,6 @@ https://orb.helius.dev/tx/<TX_SIGNATURE>?cluster=mainnet-beta&tab=summary
 
 ---
 
-## 🧪 Test Both Payment Methods
-
-### Test Solana Payment (default)
-```bash
-# In .env
-PREFERRED_NETWORK=solana-mainnet-beta
-```
-
-### Test EVM Payment
-```bash
-# In .env
-PREFERRED_NETWORK=radius-testnet
-
-# Make sure EVM wallets are funded on Radius testnet
-```
-
----
-
 ## 🐛 Troubleshooting
 
 ### Error: "Insufficient SBC balance"
@@ -285,40 +264,3 @@ PREFERRED_NETWORK=radius-testnet
 - Ensure corresponding wallet is configured in .env
 
 ---
-
-## 📊 What's Different: EVM vs Solana
-
-| Aspect | EVM (Radius) | Solana |
-|--------|--------------|---------|
-| **Signature** | EIP-712 (structured) | Ed25519 (raw message) |
-| **Token** | Native USD (18 decimals) | SBC SPL token (9 decimals) |
-| **Amount** | 0.01 USD | 0.05 SBC |
-| **Network** | Radius testnet | Solana mainnet-beta |
-| **Settlement** | Simulated (testnet) | Real (mainnet) 💰 |
-| **Explorer** | testnet.radiustech.xyz/testnet/explorer | orb.helius.dev |
-
----
-
-## ✅ Success Checklist
-
-- [ ] Facilitator accepts both EVM and Solana payments
-- [ ] Premium API offers both payment options
-- [ ] AI Agent can pay with Solana
-- [ ] Real SBC tokens transferred on-chain
-- [ ] Transaction visible on Solscan
-- [ ] Balances updated correctly
-
----
-
-## 🎉 Next Steps
-
-You now have a **production-ready multi-chain x402 facilitator**!
-
-**Possible enhancements:**
-1. Add more token support (USDC, USDT)
-2. Implement batch payments
-3. Add payment history tracking
-4. Create merchant dashboard
-5. Add webhook notifications
-
-🚀 **Your facilitator is now production-ready for the AI payment economy!**

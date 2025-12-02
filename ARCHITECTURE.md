@@ -81,7 +81,8 @@ The x402 facilitator implements a **trustless, non-custodial payment system** fo
        ↓
 ┌─────────────┐
 │  AI Agent   │  Chooses network & creates authorization
-│             │  • Radius/Base: EIP-712 signature
+│             │  • Radius: Signed native transfer transaction
+│             │  • Base: EIP-712 signature
 │             │  • Solana: Ed25519 signature
 └──────┬──────┘
        │
@@ -155,16 +156,35 @@ The x402 facilitator implements a **trustless, non-custodial payment system** fo
 ### Radius Testnet (Native USD)
 
 **Token:** Native USD (18 decimals)
-**Method:** Native transfer (`sendTransaction`)
-**Delegation:** Not applicable (native currency)
-**Gas:** Paid by facilitator
+**Method:** Pre-signed transaction broadcast
+**Delegation:** Not applicable (agent signs full transaction)
+**Gas:** Paid by agent (included in signed transaction)
+
+Native tokens don't have `transferFrom`, so we use a different approach:
+1. Agent creates and signs the native token transfer transaction
+2. Agent includes the signed transaction in the payment payload
+3. Facilitator broadcasts the pre-signed transaction
+
+This maintains the non-custodial model - the agent signs the exact transaction specifying the recipient and amount. The facilitator cannot modify it, only broadcast it.
 
 ```typescript
-await facilitator.sendTransaction({
+// Agent signs the transfer transaction
+const signedTx = await walletClient.signTransaction({
   to: merchant,
-  value: parseEther('0.01') // Agent → Merchant
+  value: parseEther('0.01'),
+  nonce,
+  gasPrice,
+  gas: 21000n,
+  chainId: 1223953
+});
+
+// Facilitator broadcasts the agent's pre-signed transaction
+await publicClient.sendRawTransaction({
+  serializedTransaction: signedTx
 });
 ```
+
+**Result:** Tokens flow directly Agent → Merchant (non-custodial)
 
 ### Base (ERC-20 Token)
 
@@ -246,11 +266,18 @@ SOLANA_AGENT_ADDRESS=...           # Makes payments
 
 ### One-Time Agent Setup
 
-#### For Base Payments
+#### For Base Mainnet Payments
 
 ```bash
 cd packages/ai-agent
 npm run approve-base-facilitator
+```
+
+#### For Base Sepolia (Testnet) Payments
+
+```bash
+cd packages/ai-agent
+npm run approve-base-sepolia-facilitator
 ```
 
 This approves the facilitator to execute ERC-20 transfers on the agent's behalf.
@@ -320,14 +347,38 @@ npm run start
 
 ## Payment Authorization Formats
 
-### EIP-712 (Radius/Base)
+### Pre-Signed Transaction (Radius)
+
+Radius uses native USD tokens which don't support ERC-20 `transferFrom`. Instead, the agent signs the complete native token transfer transaction:
+
+```typescript
+// Agent signs the complete transfer transaction
+const signedTx = await walletClient.signTransaction({
+  to: merchantAddress,
+  value: parseEther('0.01'),    // 0.01 USD
+  nonce: currentNonce,
+  gasPrice: currentGasPrice,
+  gas: 21000n,                  // Standard native transfer
+  chainId: 1223953              // Radius Testnet
+});
+
+// Payload includes the signed transaction
+{
+  from: agentAddress,
+  to: merchantAddress,
+  amount: '10000000000000000',
+  signedTransaction: signedTx   // Facilitator broadcasts this
+}
+```
+
+### EIP-712 (Base)
 
 ```typescript
 // Domain
 {
   name: 'SBC x402 Facilitator',
   version: '1',
-  chainId: 8453, // or 1223953 for Radius
+  chainId: 8453,
   verifyingContract: facilitatorAddress
 }
 
@@ -368,17 +419,33 @@ const signature = nacl.sign.detached(
 ### X-PAYMENT Header Format
 
 ```javascript
+// Base / Solana format (uses signature)
 {
   x402Version: 1,
   scheme: 'exact',
-  network: 'base', // or 'radius-testnet', 'solana-mainnet-beta'
+  network: 'base', // or 'base-sepolia', 'solana-mainnet-beta'
   payload: {
     from: agentAddress,
     to: merchantAddress,
     amount: '10000000000000000',
     nonce: 1700000000000,
     deadline: 1700000060,
-    signature: '0x...' // or base58 for Solana
+    signature: '0x...' // EIP-712 for Base, Ed25519/base58 for Solana
+  }
+}
+
+// Radius format (uses pre-signed transaction)
+{
+  x402Version: 1,
+  scheme: 'exact',
+  network: 'radius-testnet',
+  payload: {
+    from: agentAddress,
+    to: merchantAddress,
+    amount: '10000000000000000',
+    nonce: 12345,
+    deadline: 1700000060,
+    signedTransaction: '0x...'  // Complete signed native transfer tx
   }
 }
 
@@ -394,10 +461,10 @@ const xPaymentHeader = Buffer.from(JSON.stringify(proof)).toString('base64');
 
 **Key Files:**
 - `src/agent.ts` - Main orchestration & chain selection
-- `src/x402-client.ts` - Radius payment authorization
-- `src/base-client.ts` - Base payment authorization + approval
-- `src/solana-client.ts` - Solana payment authorization + delegation
-- `approve-facilitator.ts` - Base approval setup script
+- `src/x402-client.ts` - Radius payment authorization (pre-signed transactions)
+- `src/base-client.ts` - Base payment authorization (EIP-712) + approval
+- `src/solana-client.ts` - Solana payment authorization (Ed25519) + delegation
+- `approve-base-facilitator.ts` - Base approval setup script
 - `approve-solana-facilitator.ts` - Solana delegation setup script
 
 **Technologies:**
