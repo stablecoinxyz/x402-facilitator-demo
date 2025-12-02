@@ -1,11 +1,9 @@
 # x402 Facilitator POC
 
-**SBC's Multi-Chain x402 Payment Facilitator**
-
-Production-ready x402 facilitator supporting EVM, Base, and Solana:
+SBC's Multi-chain x402 Facilitator supporting Radius, Base, and Solana:
 
 - ✅ Full x402 protocol flow (HTTP 402 Payment Required)
-- ✅ **Multi-chain support:** EVM (Radius) + Base (Mainnet/Sepolia) + Solana (Mainnet)
+- ✅ **Multi-chain support:** Radius Testnet + Base (Mainnet/Sepolia) + Solana (Mainnet)
 - ✅ Custom facilitator infrastructure (not using Coinbase CDP)
 - ✅ **Real mainnet payments:** SBC token on Base and Solana
 - ✅ AI agent making autonomous payments
@@ -14,7 +12,7 @@ Production-ready x402 facilitator supporting EVM, Base, and Solana:
 ## Quick Start 🚀 Get started in 5 minutes!
 
 Choose your payment chain:
-- **EVM (Radius Testnet)** - Test with native USD tokens
+- **Radius Testnet** - Test with native USD tokens
 - **Base (Mainnet or Sepolia)** - Production-ready with SBC token (18 decimals on mainnet, 6 on sepolia)
 - **Solana (Mainnet)** - Production-ready with real SBC tokens
 
@@ -44,15 +42,15 @@ cp .env.example .env
 **For Base (Mainnet or Sepolia):**
 - `BASE_RPC_URL` - Base RPC endpoint (mainnet: `https://mainnet.base.org`, sepolia: `https://sepolia.base.org`)
 - `BASE_CHAIN_ID` - Chain ID (`8453` for mainnet, `84532` for sepolia)
-- `BASE_FACILITATOR_PRIVATE_KEY` - Facilitator's Base private key
-- `BASE_FACILITATOR_ADDRESS` - Facilitator's Base address
+- `BASE_FACILITATOR_PRIVATE_KEY` - Facilitator wallet (Base) private key
+- `BASE_FACILITATOR_ADDRESS` - Facilitator wallet (Base) address
 - `BASE_AGENT_PRIVATE_KEY` - AI agent's Base private key
 - `BASE_AGENT_ADDRESS` - AI agent's Base address
 - `BASE_SBC_TOKEN_ADDRESS` - SBC token address
   - Mainnet: `0xfdcC3dd6671eaB0709A4C0f3F53De9a333d80798` (18 decimals)
   - Sepolia: `0xf9FB20B8E097904f0aB7d12e9DbeE88f2dcd0F16` (6 decimals)
 - `BASE_SBC_DECIMALS` - Token decimals (`18` for mainnet, `6` for sepolia)
-- `BASE_PAYMENT_AMOUNT` - Payment amount (default: `10000000000000000` = 0.01 SBC for mainnet)
+- `BASE_PAYMENT_AMOUNT` - Payment amount of $0.01 (default: `10000000000000000` = 0.01 SBC for mainnet. use `10000` for sepolia)
 
 **For Solana (Mainnet):**
 - `SOLANA_RPC_URL` - Solana RPC endpoint (e.g., Helius)
@@ -61,6 +59,8 @@ cp .env.example .env
 - `AI_AGENT_SOLANA_PRIVATE_KEY` - AI agent's Solana private key (Base58)
 - `AI_AGENT_SOLANA_ADDRESS` - AI agent's Solana address
 - `SBC_TOKEN_ADDRESS` - SBC token mint (default: `DBAzBUXaLj1qANCseUPZz4sp9F8d2sc78C4vKjhbTGMA`)
+
+**Choose which network your AI agent pays in**
 - `PREFERRED_NETWORK` - `'radius-testnet'`, `'base'`, `'base-sepolia'`, or `'solana-mainnet-beta'`
 
 **💡 See [RADIUS_TEST_GUIDE.md](./RADIUS_TEST_GUIDE.md) for detailed Radius setup instructions.**
@@ -289,7 +289,7 @@ All payment methods use the x402 `exact` scheme with network-based routing.
 - **Network:** `radius-testnet`
 - **Amount:** 0.01 USD (10000000000000000 wei, 18 decimals)
 - **Token:** Native USD on Radius testnet
-- **Settlement:** Simulated (testnet)
+- **Settlement:** On-chain (testnet) transfers
 - **Settlement Time:** <2 seconds
 
 ### Base Mainnet
@@ -358,10 +358,3 @@ x402-poc/
 - **[SOLANA_TEST_GUIDE.md](./SOLANA_TEST_GUIDE.md)** - Complete Solana testing guide
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Detailed architecture documentation
 
-### Additional References
-
-See the `/debug` folder for supplementary documentation:
-- **FAQ.md** - Common questions and answers
-- **MULTI_CHAIN_ARCHITECTURE.md** - Chain-specific implementation details
-- **PAYMENT_FLOW_ANALYSIS.md** - Deep dive into payment flow
-- **EXPLORER_URLS.md** - Block explorer references for all networks
